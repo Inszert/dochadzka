@@ -5,7 +5,7 @@ import os
 
 app = Flask(__name__)
 
-DATABASE_URL = "postgresql://koyeb-adm:YOURTOKEN@ep-cold-cloud-a2abkwup.eu-central-1.pg.koyeb.app/koyebdb"
+DATABASE_URL = "postgresql://koyeb-adm:npg_wzo2Xd3SAZYF@ep-cold-cloud-a2abkwup.eu-central-1.pg.koyeb.app/koyebdb"
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", DATABASE_URL)
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
