@@ -1,65 +1,65 @@
-from flask import Flask, request, jsonify
-from models import db, Attendance
+from flask import request, jsonify, render_template_string, redirect
+from app import app, db
+from models import Employee, Attendance
 from datetime import datetime
 
-def init_routes(app):
-    # Pridanie dochádzky
-    @app.route("/api/attendance", methods=["POST"])
-    def add_attendance():
-        data = request.json
-        try:
-            date_obj = datetime.strptime(data["date"], "%Y-%m-%d").date()
-            start_time_obj = datetime.strptime(data["start_time"], "%H:%M").time()
-            end_time_obj = datetime.strptime(data["end_time"], "%H:%M").time()
+# Pridanie zamestnanca
+@app.route("/employee", methods=["POST"])
+def add_employee():
+    data = request.json
+    if not data:
+        return jsonify({"error": "Missing JSON"}), 400
 
-            new_entry = Attendance(
-                first_name=data["first_name"],
-                last_name=data["last_name"],
-                workplace=data["workplace"],
-                date=date_obj,
-                start_time=start_time_obj,
-                end_time=end_time_obj
-            )
-            db.session.add(new_entry)
-            db.session.commit()
-            return jsonify({"message": "Attendance added"}), 201
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
+    emp = Employee(
+        first_name=data.get("first_name"),
+        last_name=data.get("last_name"),
+        workplace=data.get("workplace")
+    )
+    db.session.add(emp)
+    db.session.commit()
+    return jsonify({"id": emp.id})
 
-    # Získanie mesačnej tabuľky (filter podľa mesiaca)
-    @app.route("/api/attendance", methods=["GET"])
-    def get_attendance():
-        month = request.args.get("month")  # "2025-09"
-        if not month:
-            return jsonify({"error": "Month parameter required (YYYY-MM)"}), 400
+# Pridanie dochádzky
+@app.route("/attendance", methods=["POST"])
+def add_attendance():
+    data = request.json
+    if not data:
+        return jsonify({"error": "Missing JSON"}), 400
 
-        try:
-            year, mon = map(int, month.split("-"))
-        except:
-            return jsonify({"error": "Invalid month format"}), 400
+    emp = Employee.query.get(data.get("employee_id"))
+    if not emp:
+        return jsonify({"error": "Employee not found"}), 404
 
-        entries = Attendance.query.filter(
-            db.extract("year", Attendance.date) == year,
-            db.extract("month", Attendance.date) == mon
-        ).order_by(Attendance.date).all()
+    att = Attendance(
+        employee_id=emp.id,
+        date=datetime.strptime(data.get("date"), "%Y-%m-%d").date(),
+        start_time=datetime.strptime(data.get("start_time"), "%H:%M").time(),
+        end_time=datetime.strptime(data.get("end_time"), "%H:%M").time()
+    )
+    db.session.add(att)
+    db.session.commit()
+    return jsonify({"id": att.id})
 
-        table = []
-        total_hours = 0
-        for e in entries:
-            hours = e.worked_hours()
-            total_hours += hours
-            table.append({
-                "first_name": e.first_name,
-                "last_name": e.last_name,
-                "workplace": e.workplace,
-                "date": e.date.strftime("%Y-%m-%d"),
-                "start_time": e.start_time.strftime("%H:%M"),
-                "end_time": e.end_time.strftime("%H:%M"),
-                "hours": round(hours, 2)
-            })
+# Zobrazenie dochádzky
+@app.route("/attendance/<int:employee_id>")
+def show_attendance(employee_id):
+    emp = Employee.query.get_or_404(employee_id)
+    attendances = emp.attendances
+    total_hours = sum([a.hours_worked() for a in attendances])
 
-        return jsonify({
-            "month": month,
-            "total_hours": round(total_hours, 2),
-            "entries": table
-        })
+    return render_template_string("""
+    <h1>Dochádzka: {{ emp.first_name }} {{ emp.last_name }}</h1>
+    <p>Pracovisko: {{ emp.workplace }}</p>
+    <table border="1">
+        <tr><th>Dátum</th><th>Od</th><th>Do</th><th>Odpracované hodiny</th></tr>
+        {% for a in attendances %}
+        <tr>
+            <td>{{ a.date }}</td>
+            <td>{{ a.start_time }}</td>
+            <td>{{ a.end_time }}</td>
+            <td>{{ "%.2f"|format(a.hours_worked()) }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    <p>Spolu hodiny: {{ "%.2f"|format(total_hours) }}</p>
+    """, emp=emp, attendances=attendances, total_hours=total_hours)
