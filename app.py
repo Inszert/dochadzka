@@ -8,8 +8,8 @@ app = Flask(__name__)
 database_url = os.environ['DATABASE_URL']
 
 # Ak URL začína "postgres://", nahraď ju správnym prefixom
-if database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
