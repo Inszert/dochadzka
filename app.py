@@ -1,90 +1,40 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
 import os
+from flask import Flask, render_template, request
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-# DB connection z environment variable (Koyeb)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')  # PostgreSQL URI
+# -------------------- KONFIGURÁCIA --------------------
+# Tu sa berie DB URL z environment variable DATABASE_URL
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Tajný kľúč pre Flask sessions
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'devkey')
+
+# Inicializácia databázy
 db = SQLAlchemy(app)
 
-# MODELS
-class Employee(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String(100), nullable=False)
+# -------------------- MODELY --------------------
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
 
-class Location(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String(100), nullable=False)
-
-class Attendance(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
-  location_id = db.Column(db.Integer, db.ForeignKey('location.id'), nullable=False)
-  start_time = db.Column(db.DateTime, nullable=False)
-  end_time = db.Column(db.DateTime, nullable=False)
-
-# ROUTES
+# -------------------- ROUTES --------------------
 @app.route('/')
 def index():
-  return "Dochádzka API je živá!"
+    users = User.query.all()
+    return render_template('index.html', users=users)
 
-@app.route('/employee/add', methods=['POST'])
-def add_employee():
-  data = request.json
-  if not data or 'name' not in data:
-    return jsonify({'error': 'Missing name'}), 400
-  emp = Employee(name=data['name'])
-  db.session.add(emp)
-  db.session.commit()
-  return jsonify({'id': emp.id, 'name': emp.name})
+@app.route('/add', methods=['POST'])
+def add_user():
+    username = request.form.get('username')
+    if username:
+        user = User(username=username)
+        db.session.add(user)
+        db.session.commit()
+    return "User added!"
 
-@app.route('/location/add', methods=['POST'])
-def add_location():
-  data = request.json
-  if not data or 'name' not in data:
-    return jsonify({'error': 'Missing name'}), 400
-  loc = Location(name=data['name'])
-  db.session.add(loc)
-  db.session.commit()
-  return jsonify({'id': loc.id, 'name': loc.name})
-
-@app.route('/attendance/add', methods=['POST'])
-def add_attendance():
-  data = request.json
-  try:
-    att = Attendance(
-      employee_id = data['employee_id'],
-      location_id = data['location_id'],
-      start_time = datetime.fromisoformat(data['start_time']),
-      end_time = datetime.fromisoformat(data['end_time'])
-    )
-    db.session.add(att)
-    db.session.commit()
-    return jsonify({'id': att.id})
-  except Exception as e:
-    return jsonify({'error': str(e)}), 400
-
-@app.route('/attendance/list', methods=['GET'])
-def list_attendance():
-  records = Attendance.query.all()
-  result = []
-  for r in records:
-    result.append({
-      'employee_id': r.employee_id,
-      'employee_name': Employee.query.get(r.employee_id).name,
-      'location_id': r.location_id,
-      'location_name': Location.query.get(r.location_id).name,
-      'start_time': r.start_time.isoformat(),
-      'end_time': r.end_time.isoformat()
-    })
-  return jsonify(result)
-
+# -------------------- SPAUSTENIE --------------------
 if __name__ == '__main__':
-  # vytvor DB tables, ak ešte neexistujú
-  with app.app_context():
-    db.create_all()
-  app.run(host='0.0.0.0', port=8000, debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
