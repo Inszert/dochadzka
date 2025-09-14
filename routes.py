@@ -63,3 +63,4 @@ def show_attendance(employee_id):
     </table>
     <p>Spolu hodiny: {{ "%.2f"|format(total_hours) }}</p>
     """, emp=emp, attendances=attendances, total_hours=total_hours)
+
