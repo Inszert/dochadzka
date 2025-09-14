@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <title>Dochádzka - Formulár</title>
+</head>
+<body>
+  <h1>Pridať dochádzku</h1>
+  <form method="POST">
+    <label>Meno:</label><br>
+    <input type="text" name="first_name" required><br>
+    <label>Priezvisko:</label><br>
+    <input type="text" name="last_name" required><br>
+    <label>Pracovisko:</label><br>
+    <input type="text" name="workplace" required><br>
+    <label>Dátum:</label><br>
+    <input type="date" name="date" required><br>
+    <label>Od:</label><br>
+    <input type="time" name="start_time" required><br>
+    <label>Do:</label><br>
+    <input type="time" name="end_time" required><br><br>
+    <input type="submit" value="Uložiť">
+  </form>
+  <a href="/attendance">Zobraziť tabuľku</a>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <title>Dochádzka - Tabuľka</title>
+</head>
+<body>
+  <h1>Dochádzka</h1>
+  <table border="1">
+    <tr>
+      <th>Meno</th>
+      <th>Priezvisko</th>
+      <th>Pracovisko</th>
+      <th>Dátum</th>
+      <th>Od</th>
+      <th>Do</th>
+      <th>Odpracované hodiny</th>
+    </tr>
+    {% for entry in entries %}
+    <tr>
+      <td>{{ entry.first_name }}</td>
+      <td>{{ entry.last_name }}</td>
+      <td>{{ entry.workplace }}</td>
+      <td>{{ entry.date }}</td>
+      <td>{{ entry.start_time }}</td>
+      <td>{{ entry.end_time }}</td>
+      <td>{{ "%.2f"|format(entry.worked_hours()) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <h3>Celkom odpracované hodiny: {{ "%.2f"|format(total_hours) }}</h3>
+  <a href="/">Pridať nový záznam</a>
+</body>
+</html>
