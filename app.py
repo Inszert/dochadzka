@@ -4,44 +4,28 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-# -------------------- KONFIGURÁCIA --------------------
-database_url = os.environ['DATABASE_URL']
+# Získanie URL databázy z prostredia
+database_url = os.environ.get('DATABASE_URL')
+if not database_url:
+    raise ValueError("DATABASE_URL environment variable not set")
 
-database_url = os.environ['DATABASE_URL']
-
-# Ak URL začína "postgres://", nahraď "postgresql+psycopg://" pre SQLAlchemy s psycopg3
+# Pre psycopg3 musí byť prefix "postgresql+psycopg://"
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Tajný kľúč pre Flask sessions
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'devkey')
-
-# Inicializácia databázy
 db = SQLAlchemy(app)
-# -------------------- MODELY --------------------
+
+# Jednoduchý model pre test
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    name = db.Column(db.String(50), nullable=False)
 
-# -------------------- ROUTES --------------------
-@app.route('/')
+@app.route("/")
 def index():
-    users = User.query.all()
-    return render_template('index.html', users=users)
+    return "Hello, world!"
 
-@app.route('/add', methods=['POST'])
-def add_user():
-    username = request.form.get('username')
-    if username:
-        user = User(username=username)
-        db.session.add(user)
-        db.session.commit()
-    return "User added!"
-
-# -------------------- SPAUSTENIE --------------------
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
