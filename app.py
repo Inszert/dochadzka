@@ -5,8 +5,13 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 
 # -------------------- KONFIGURÁCIA --------------------
-# Tu sa berie DB URL z environment variable DATABASE_URL
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
+database_url = os.environ['DATABASE_URL']
+
+# Ak URL začína "postgres://", nahraď ju správnym prefixom
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Tajný kľúč pre Flask sessions
@@ -14,7 +19,6 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'devkey')
 
 # Inicializácia databázy
 db = SQLAlchemy(app)
-
 # -------------------- MODELY --------------------
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
