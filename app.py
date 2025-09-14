@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
@@ -7,9 +7,11 @@ app = Flask(__name__)
 # -------------------- KONFIGURÁCIA --------------------
 database_url = os.environ['DATABASE_URL']
 
-# Ak URL začína "postgres://", nahraď ju správnym prefixom
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql://", 1)
+# Ak URL začína "postgres://", nahraď ju správnym prefixom pre psycopg 3
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
