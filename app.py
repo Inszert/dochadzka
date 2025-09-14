@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, render_template_string, redirect
+from flask import Flask, request, render_template_string, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
@@ -13,7 +13,6 @@ app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
-# Inicializácia SQLAlchemy
 db = SQLAlchemy(app)
 
 # Model pre zamestnanca
@@ -25,7 +24,7 @@ class Employee(db.Model):
 with app.app_context():
     db.create_all()
 
-# Hlavná stránka s formulárom
+# Hlavná stránka
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -40,6 +39,7 @@ def index():
     employees = Employee.query.all()
     return render_template_string("""
         <h1>Dochádzka</h1>
+        <a href="{{ url_for('attendance') }}">Prejsť na dochádzku</a>
         <form method="POST">
             <input name="name" placeholder="Meno">
             <input name="surname" placeholder="Priezvisko">
@@ -50,6 +50,20 @@ def index():
         <ul>
         {% for emp in employees %}
             <li>{{ emp.name }} {{ emp.surname }}</li>
+        {% endfor %}
+        </ul>
+    """, employees=employees)
+
+# Druhá podstránka – dochádzka
+@app.route("/attendance")
+def attendance():
+    employees = Employee.query.all()
+    return render_template_string("""
+        <h1>Dochádzka - stránka Talcilod štýl</h1>
+        <a href="{{ url_for('index') }}">Späť na hlavnú</a>
+        <ul>
+        {% for emp in employees %}
+            <li>{{ emp.name }} {{ emp.surname }} – tu môžeš pridať dochádzku</li>
         {% endfor %}
         </ul>
     """, employees=employees)
