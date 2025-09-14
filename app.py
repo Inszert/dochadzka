@@ -4,26 +4,24 @@ from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-# DATABASE_URL z prostredia (Heroku/Koyeb)
-database_url = os.environ.get("DATABASE_URL", "sqlite:///test.db")
+# Získame URL databázy z environment premennej
+database_url = os.environ.get("DATABASE_URL")
 
-# psycopg3 prefix pre SQLAlchemy
+# SQLAlchemy 2.x vyžaduje prefix 'postgresql://', nie 'postgres://'
 if database_url.startswith("postgres://"):
-  database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+  database_url = database_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
+# Inicializácia SQLAlchemy
 db = SQLAlchemy(app)
 
-# Jednoduchý model pre test
-class User(db.Model):
-  id = db.Column(db.Integer, primary_key=True)
-  name = db.Column(db.String(50), nullable=False)
-
+# Test route
 @app.route("/")
 def index():
-  return "Hello, world!"
+  return "App is running!"
 
 if __name__ == "__main__":
-  app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+  app.run(host="0.0.0.0", port=8000)
