@@ -5,12 +5,14 @@ import os
 
 app = Flask(__name__)
 
-DATABASE_URL = "postgresql://koyeb-adm:npg_wzo2Xd3SAZYF@ep-cold-cloud-a2abkwup.eu-central-1.pg.koyeb.app/koyebdb"
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", DATABASE_URL)
+# Použi DATABASE_URL zo systémového prostredia alebo tu nastav priamo s sslmode=require
+DATABASE_URL = os.getenv("DATABASE_URL") or "postgresql://koyeb-adm:npg_wzo2Xd3SAZYF@ep-cold-cloud-a2abkwup.eu-central-1.pg.koyeb.app/koyebdb?sslmode=require"
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
+# --- MODELY ---
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), nullable=False)
@@ -31,12 +33,11 @@ class Attendance(db.Model):
     check_out = db.Column(db.Time, nullable=True)
     hours_worked = db.Column(db.Float, nullable=True)
 
-# Routes
+# --- ROUTES ---
 @app.route("/")
 def home():
     return "✅ Attendance system with locations working!"
 
-# Add employee
 @app.route("/employee/add", methods=["POST"])
 def add_employee():
     data = request.json
@@ -45,7 +46,6 @@ def add_employee():
     db.session.commit()
     return jsonify({"id": emp.id, "name": emp.name})
 
-# Add location
 @app.route("/location/add", methods=["POST"])
 def add_location():
     data = request.json
@@ -54,7 +54,6 @@ def add_location():
     db.session.commit()
     return jsonify({"id": loc.id, "name": loc.name})
 
-# Add attendance
 @app.route("/attendance/add", methods=["POST"])
 def add_attendance():
     data = request.json
@@ -73,7 +72,6 @@ def add_attendance():
     db.session.commit()
     return jsonify({"id": att.id, "hours_worked": att.hours_worked})
 
-# List all attendance (for reporting)
 @app.route("/attendance/list")
 def list_attendance():
     all_att = Attendance.query.all()

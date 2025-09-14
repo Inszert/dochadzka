@@ -1,4 +1,4 @@
-flask
-flask_sqlalchemy
-psycopg2-binary
-gunicorn
+Flask==3.1.2
+Flask-SQLAlchemy==3.0.5
+psycopg2-binary==2.9.7
+gunicorn==21.2.0
