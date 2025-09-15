@@ -2,7 +2,7 @@
 {% block content %}
 <h2>Dochádzka</h2>
 <form method="POST" class="row g-3 mb-3">
-  <div class="col">
+  <div class="col-md-2">
     <select class="form-select" name="employee_id" required>
       <option value="">Vyberte zamestnanca</option>
       {% for e in employees %}
@@ -10,25 +10,45 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col"><input class="form-control" type="date" name="date" required></div>
-  <div class="col"><input class="form-control" type="time" name="start_time" required></div>
-  <div class="col"><input class="form-control" type="time" name="end_time" required></div>
-  <div class="col"><button class="btn btn-primary">Pridať</button></div>
+  <div class="col-md-2"><input class="form-control" type="date" name="date" required value="{{ now }}"></div>
+  <div class="col-md-2"><input class="form-control" type="time" name="start_time" required></div>
+  <div class="col-md-2"><input class="form-control" type="time" name="end_time" required></div>
+  <div class="col-md-2">
+    <select class="form-select" name="work_location" required>
+      <option value="">Vyberte miesto</option>
+      {% for location in work_locations %}
+        <option value="{{ location }}">{{ location }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2"><button class="btn btn-primary">Pridať</button></div>
 </form>
 
-<table class="table table-bordered">
-  <thead>
-    <tr><th>ID</th><th>Zamestnanec</th><th>Dátum</th><th>Od</th><th>Do</th><th>Hodiny</th></tr>
+<table class="table table-bordered table-striped">
+  <thead class="table-dark">
+    <tr>
+      <th>Zamestnanec</th>
+      <th>Dátum</th>
+      <th>Od</th>
+      <th>Do</th>
+      <th>Hodiny</th>
+      <th>Miesto</th>
+      <th>Akcie</th>
+    </tr>
   </thead>
   <tbody>
   {% for r in records %}
   <tr>
-    <td>{{ r.id }}</td>
     <td>{{ r.employee.name }} {{ r.employee.surname }}</td>
     <td>{{ r.date }}</td>
     <td>{{ r.start_time.strftime('%H:%M') }}</td>
     <td>{{ r.end_time.strftime('%H:%M') }}</td>
     <td>{{ r.hours_worked() }}</td>
+    <td>{{ r.work_location }}</td>
+    <td>
+      <a href="/edit_attendance/{{ r.id }}" class="btn btn-sm btn-warning">Edit</a>
+      <a href="/delete_attendance/{{ r.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Naozaj chcete odstrániť tento záznam?')">Delete</a>
+    </td>
   </tr>
   {% endfor %}
   </tbody>

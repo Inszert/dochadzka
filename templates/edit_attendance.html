@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Editovať záznam dochádzky</h2>
+<form method="POST" class="row g-3">
+  <div class="col-md-6">
+    <label class="form-label">Zamestnanec</label>
+    <select class="form-select" name="employee_id" required>
+      <option value="">Vyberte zamestnanca</option>
+      {% for e in employees %}
+        <option value="{{ e.id }}" {% if e.id == record.employee_id %}selected{% endif %}>{{ e.name }} {{ e.surname }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Dátum</label>
+    <input class="form-control" type="date" name="date" value="{{ record.date }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Čas začiatku</label>
+    <input class="form-control" type="time" name="start_time" value="{{ record.start_time.strftime('%H:%M') }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Čas konca</label>
+    <input class="form-control" type="time" name="end_time" value="{{ record.end_time.strftime('%H:%M') }}" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Miesto práce</label>
+    <select class="form-select" name="work_location" required>
+      <option value="">Vyberte miesto</option>
+      {% for location in work_locations %}
+        <option value="{{ location }}" {% if location == record.work_location %}selected{% endif %}>{{ location }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 mt-4">
+    <button type="submit" class="btn btn-success">Uložiť zmeny</button>
+    <a href="/attendance" class="btn btn-secondary">Zrušiť</a>
+  </div>
+</form>
+{% endblock %}

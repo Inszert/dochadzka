@@ -1,21 +1,44 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Zamestnanci</h1>
-<form method="POST" class="mb-3">
-    <input name="name" placeholder="Meno" class="form-control mb-2">
-    <input name="surname" placeholder="Priezvisko" class="form-control mb-2">
-    <input name="workplace" placeholder="Pracovisko" class="form-control mb-2">
-    <button type="submit" class="btn btn-primary">Pridaj</button>
+<form method="POST" class="row g-3 mb-4 p-3 bg-light rounded">
+  <div class="col-md-3">
+    <input name="name" placeholder="Meno" class="form-control" required>
+  </div>
+  <div class="col-md-3">
+    <input name="surname" placeholder="Priezvisko" class="form-control" required>
+  </div>
+  <div class="col-md-3">
+    <input name="workplace" placeholder="Pracovisko" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <button type="submit" class="btn btn-primary">Pridaj zamestnanca</button>
+  </div>
 </form>
 
-<h2>Všetci zamestnanci</h2>
-<ul class="list-group">
-{% for emp in all_emps %}
-    <li class="list-group-item">
-        {{ emp.name }} {{ emp.surname }} ({{ emp.workplace }})
-        - <a href="/edit_employee/{{ emp.id }}">Edit</a>
-        - <a href="/report/{{ emp.id }}">Report</a>
-    </li>
-{% endfor %}
-</ul>
+<h2>Zoznam zamestnancov</h2>
+<table class="table table-bordered table-striped">
+  <thead class="table-dark">
+    <tr>
+      <th>Meno</th>
+      <th>Priezvisko</th>
+      <th>Pracovisko</th>
+      <th>Akcie</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for emp in all_emps %}
+    <tr>
+      <td>{{ emp.name }}</td>
+      <td>{{ emp.surname }}</td>
+      <td>{{ emp.workplace }}</td>
+      <td>
+        <a href="/edit_employee/{{ emp.id }}" class="btn btn-sm btn-warning">Edit</a>
+        <a href="/report/{{ emp.id }}" class="btn btn-sm btn-info">Report</a>
+        <a href="/delete_employee/{{ emp.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Naozaj chcete odstrániť tohto zamestnanca a všetky jeho záznamy?')">Delete</a>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% endblock %}

@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, render_template_string
+from flask import render_template, request, redirect, url_for, render_template_string, flash
 from app import app
 from models import db, Employee, Attendance
 from datetime import datetime
@@ -18,7 +18,11 @@ def employees():
             emp = Employee(name=name, surname=surname, workplace=workplace)
             db.session.add(emp)
             db.session.commit()
-            return redirect("/employees")
+            flash("Zamestnanec bol pridaný", "success")
+        else:
+            flash("Meno a priezvisko sú povinné", "danger")
+        
+        return redirect("/employees")
     
     all_emps = Employee.query.all()
     return render_template("employees.html", all_emps=all_emps)
@@ -30,8 +34,9 @@ def attendance():
         date_str = request.form.get("date")
         start_time_str = request.form.get("start_time")
         end_time_str = request.form.get("end_time")
+        work_location = request.form.get("work_location")
         
-        if employee_id and date_str and start_time_str and end_time_str:
+        if employee_id and date_str and start_time_str and end_time_str and work_location:
             date = datetime.strptime(date_str, "%Y-%m-%d").date()
             start_time = datetime.strptime(start_time_str, "%H:%M").time()
             end_time = datetime.strptime(end_time_str, "%H:%M").time()
@@ -40,15 +45,57 @@ def attendance():
                 employee_id=employee_id,
                 date=date,
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                work_location=work_location
             )
             db.session.add(record)
             db.session.commit()
-            return redirect("/attendance")
+            flash("Záznam bol pridaný", "success")
+        else:
+            flash("Všetky polia sú povinné", "danger")
+        
+        return redirect("/attendance")
     
-    records = Attendance.query.all()
+    records = Attendance.query.order_by(Attendance.date.desc()).all()
     employees = Employee.query.all()
-    return render_template("attendance.html", records=records, employees=employees)
+    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa"]  # Example locations
+    return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)
+
+@app.route("/edit_attendance/<int:record_id>", methods=["GET", "POST"])
+def edit_attendance(record_id):
+    record = Attendance.query.get_or_404(record_id)
+    employees = Employee.query.all()
+    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa"]
+    
+    if request.method == "POST":
+        employee_id = request.form.get("employee_id")
+        date_str = request.form.get("date")
+        start_time_str = request.form.get("start_time")
+        end_time_str = request.form.get("end_time")
+        work_location = request.form.get("work_location")
+        
+        if employee_id and date_str and start_time_str and end_time_str and work_location:
+            record.employee_id = employee_id
+            record.date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            record.start_time = datetime.strptime(start_time_str, "%H:%M").time()
+            record.end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            record.work_location = work_location
+            
+            db.session.commit()
+            flash("Záznam bol upravený", "success")
+            return redirect("/attendance")
+        else:
+            flash("Všetky polia sú povinné", "danger")
+    
+    return render_template("edit_attendance.html", record=record, employees=employees, work_locations=work_locations)
+
+@app.route("/delete_attendance/<int:record_id>")
+def delete_attendance(record_id):
+    record = Attendance.query.get_or_404(record_id)
+    db.session.delete(record)
+    db.session.commit()
+    flash("Záznam bol odstránený", "success")
+    return redirect("/attendance")
 
 @app.route("/edit_employee/<int:emp_id>", methods=["GET", "POST"])
 def edit_employee(emp_id):
@@ -59,9 +106,22 @@ def edit_employee(emp_id):
         emp.surname = request.form.get("surname")
         emp.workplace = request.form.get("workplace")
         db.session.commit()
+        flash("Zamestnanec bol upravený", "success")
         return redirect("/employees")
     
     return render_template("edit_employee.html", emp=emp)
+
+@app.route("/delete_employee/<int:emp_id>")
+def delete_employee(emp_id):
+    emp = Employee.query.get_or_404(emp_id)
+    
+    # First delete all attendance records for this employee
+    Attendance.query.filter_by(employee_id=emp_id).delete()
+    
+    db.session.delete(emp)
+    db.session.commit()
+    flash("Zamestnanec bol odstránený", "success")
+    return redirect("/employees")
 
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
@@ -78,7 +138,7 @@ def report(emp_id):
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
             records = records.filter(Attendance.date >= start_date, Attendance.date <= end_date)
     
-    records = records.all()
+    records = records.order_by(Attendance.date.desc()).all()
     for rec in records:
         total_hours += rec.hours_worked()
     
