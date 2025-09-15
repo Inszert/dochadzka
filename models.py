@@ -1,5 +1,6 @@
+# models.py
+from extensions import db
 from datetime import datetime
-from app import db
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)

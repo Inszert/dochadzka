@@ -1,6 +1,6 @@
 import os
 from flask import Flask
-from models import db
+from extensions import db  # db je tu definované v separátnom súbore
 
 app = Flask(__name__)
 
