@@ -1,19 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Report dochádzky</h2>
-<table class="table table-bordered">
-  <tr><th>ID</th><th>Zamestnanec</th><th>Dátum</th><th>Od</th><th>Do</th><th>Hodiny</th></tr>
-  {% for r in records %}
-  <tr>
-    <td>{{ r.id }}</td>
-    <td>{{ r.employee.name }} {{ r.employee.surname }}</td>
-    <td>{{ r.date }}</td>
-    <td>{{ r.start_time }}</td>
-    <td>{{ r.end_time }}</td>
-    <td>{{ r.hours_worked() }}</td>
-  </tr>
-  {% endfor %}
-</table>
+<h1>Report: {{ emp.name }} {{ emp.surname }}</h1>
+<form method="POST" class="mb-3">
+    <label>Od: <input type="date" name="start_date" class="form-control mb-2"></label>
+    <label>Do: <input type="date" name="end_date" class="form-control mb-2"></label>
+    <button type="submit" class="btn btn-primary">Filter</button>
+</form>
 
-<h4>Celkový počet hodín: {{ total_hours }}</h4>
+<h2>Dochádzka</h2>
+<ul class="list-group">
+{% for rec in records %}
+    <li class="list-group-item">{{ rec.date }}: {{ rec.start_time }} - {{ rec.end_time }}</li>
+{% endfor %}
+</ul>
+
+<h3>Odpracované hodiny: {{ total_hours }}</h3>
 {% endblock %}

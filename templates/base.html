@@ -1,23 +1,16 @@
 <!DOCTYPE html>
-<html lang="sk">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Dochádzkový systém</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <title>Dochádzka</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
-<body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-    <div class="container">
-      <a class="navbar-brand" href="{{ url_for('home') }}">Dochádzka</a>
-      <div>
-        <a class="btn btn-outline-light me-2" href="{{ url_for('employees') }}">Zamestnanci</a>
-        <a class="btn btn-outline-light me-2" href="{{ url_for('attendance') }}">Dochádzka</a>
-        <a class="btn btn-outline-light" href="{{ url_for('report') }}">Report</a>
-      </div>
-    </div>
-  </nav>
-  <div class="container">
+<body class="p-4">
+<div class="container">
+    <nav class="mb-4">
+        <a href="/employees" class="btn btn-primary">Zamestnanci</a>
+    </nav>
     {% block content %}{% endblock %}
-  </div>
+</div>
 </body>
 </html>

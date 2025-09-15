@@ -1,11 +1,12 @@
-from app import db
-from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
+
+db = SQLAlchemy()
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     surname = db.Column(db.String(50), nullable=False)
-    workplace = db.Column(db.String(100))  # nový stĺpec
+    workplace = db.Column(db.String(100))
 
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -13,9 +14,4 @@ class Attendance(db.Model):
     date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-
     employee = db.relationship('Employee', backref=db.backref('attendances', lazy=True))
-
-    def hours_worked(self):
-        delta = datetime.combine(self.date, self.end_time) - datetime.combine(self.date, self.start_time)
-        return delta.total_seconds() / 3600

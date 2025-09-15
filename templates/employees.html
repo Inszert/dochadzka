@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Zamestnanci</h2>
-<form method="POST" class="row g-3 mb-3">
-  <div class="col"><input class="form-control" name="name" placeholder="Meno"></div>
-  <div class="col"><input class="form-control" name="surname" placeholder="Priezvisko"></div>
-  <div class="col"><input class="form-control" name="workplace" placeholder="Pracovisko"></div>
-  <div class="col"><button class="btn btn-primary">Pridať</button></div>
+<h1>Zamestnanci</h1>
+<form method="POST" class="mb-4">
+    <input name="name" placeholder="Meno" class="form-control mb-2">
+    <input name="surname" placeholder="Priezvisko" class="form-control mb-2">
+    <input name="workplace" placeholder="Pracovisko" class="form-control mb-2">
+    <button type="submit" class="btn btn-success">Pridaj</button>
 </form>
-<table class="table table-bordered">
-  <tr><th>ID</th><th>Meno</th><th>Priezvisko</th><th>Pracovisko</th></tr>
-  {% for e in employees %}
-  <tr><td>{{ e.id }}</td><td>{{ e.name }}</td><td>{{ e.surname }}</td><td>{{ e.workplace }}</td></tr>
-  {% endfor %}
-</table>
+
+<h2>Všetci zamestnanci</h2>
+<ul class="list-group">
+{% for emp in all_emps %}
+    <li class="list-group-item">
+        {{ emp.name }} {{ emp.surname }} ({{ emp.workplace }})
+        <a href="/edit_employee/{{ emp.id }}" class="btn btn-sm btn-warning ms-2">Edit</a>
+        <a href="/report/{{ emp.id }}" class="btn btn-sm btn-info ms-2">Report</a>
+    </li>
+{% endfor %}
+</ul>
 {% endblock %}
