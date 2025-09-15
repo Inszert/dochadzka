@@ -1,6 +1,5 @@
-from flask_sqlalchemy import SQLAlchemy
-
-db = SQLAlchemy()
+from datetime import datetime
+from app import db
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -10,8 +9,15 @@ class Employee(db.Model):
 
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'))
     date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
-    employee = db.relationship('Employee', backref=db.backref('attendances', lazy=True))
+    
+    employee = db.relationship("Employee", backref="attendances")
+
+    def hours_worked(self):
+        start = datetime.combine(self.date, self.start_time)
+        end = datetime.combine(self.date, self.end_time)
+        delta = end - start
+        return round(delta.total_seconds() / 3600, 2)
