@@ -1,21 +1,32 @@
-{% extends "base.html" %}
-{% block content %}
-<h1>Zamestnanci</h1>
-<form method="POST" class="mb-4">
-    <input name="name" placeholder="Meno" class="form-control mb-2">
-    <input name="surname" placeholder="Priezvisko" class="form-control mb-2">
-    <input name="workplace" placeholder="Pracovisko" class="form-control mb-2">
-    <button type="submit" class="btn btn-success">Pridaj</button>
-</form>
+@app.route("/employees", methods=["GET", "POST"])
+def employees():
+    if request.method == "POST":
+        name = request.form.get("name")
+        surname = request.form.get("surname")
+        workplace = request.form.get("workplace")
+        if name and surname:
+            emp = Employee(name=name, surname=surname, workplace=workplace)
+            db.session.add(emp)
+            db.session.commit()
+            return redirect("/employees")
+    
+    all_emps = Employee.query.all()
+    return render_template_string("""
+        <h1>Zamestnanci</h1>
+        <form method="POST">
+            <input name="name" placeholder="Meno">
+            <input name="surname" placeholder="Priezvisko">
+            <input name="workplace" placeholder="Pracovisko">
+            <button type="submit">Pridaj</button>
+        </form>
 
-<h2>Všetci zamestnanci</h2>
-<ul class="list-group">
-{% for emp in all_emps %}
-    <li class="list-group-item">
-        {{ emp.name }} {{ emp.surname }} ({{ emp.workplace }})
-        <a href="/edit_employee/{{ emp.id }}" class="btn btn-sm btn-warning ms-2">Edit</a>
-        <a href="/report/{{ emp.id }}" class="btn btn-sm btn-info ms-2">Report</a>
-    </li>
-{% endfor %}
-</ul>
-{% endblock %}
+        <h2>Všetci zamestnanci</h2>
+        <ul>
+        {% for emp in all_emps %}
+            <li>{{ emp.name }} {{ emp.surname }} ({{ emp.workplace }})
+                - <a href="/edit_employee/{{ emp.id }}">Edit</a>
+                - <a href="/report/{{ emp.id }}">Report</a>
+            </li>
+        {% endfor %}
+        </ul>
+    """, all_emps=all_emps)
