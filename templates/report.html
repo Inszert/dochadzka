@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Report dochádzky</h2>
+<table class="table table-bordered">
+  <tr><th>ID</th><th>Zamestnanec</th><th>Dátum</th><th>Od</th><th>Do</th><th>Hodiny</th></tr>
+  {% for r in records %}
+  <tr>
+    <td>{{ r.id }}</td>
+    <td>{{ r.employee.name }} {{ r.employee.surname }}</td>
+    <td>{{ r.date }}</td>
+    <td>{{ r.start_time }}</td>
+    <td>{{ r.end_time }}</td>
+    <td>{{ r.hours_worked() }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h4>Celkový počet hodín: {{ total_hours }}</h4>
+{% endblock %}

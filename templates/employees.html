@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Zamestnanci</h2>
+<form method="POST" class="row g-3 mb-3">
+  <div class="col"><input class="form-control" name="name" placeholder="Meno"></div>
+  <div class="col"><input class="form-control" name="surname" placeholder="Priezvisko"></div>
+  <div class="col"><input class="form-control" name="workplace" placeholder="Pracovisko"></div>
+  <div class="col"><button class="btn btn-primary">Pridať</button></div>
+</form>
+<table class="table table-bordered">
+  <tr><th>ID</th><th>Meno</th><th>Priezvisko</th><th>Pracovisko</th></tr>
+  {% for e in employees %}
+  <tr><td>{{ e.id }}</td><td>{{ e.name }}</td><td>{{ e.surname }}</td><td>{{ e.workplace }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}
