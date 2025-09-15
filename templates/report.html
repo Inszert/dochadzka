@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Report: {{ emp.name }} {{ emp.surname }}</h1>
-<form method="POST" class="mb-3">
-    <label>Od: <input type="date" name="start_date" class="form-control mb-2"></label>
-    <label>Do: <input type="date" name="end_date" class="form-control mb-2"></label>
-    <button type="submit" class="btn btn-primary">Filter</button>
+<form method="POST" class="mb-3 row">
+    <div class="col">
+        <label>Od: <input type="date" name="start_date" class="form-control"></label>
+    </div>
+    <div class="col">
+        <label>Do: <input type="date" name="end_date" class="form-control"></label>
+    </div>
+    <div class="col">
+        <button type="submit" class="btn btn-primary mt-4">Filter</button>
+    </div>
 </form>
 
 <h2>Dochádzka</h2>
 <ul class="list-group">
 {% for rec in records %}
-    <li class="list-group-item">{{ rec.date }}: {{ rec.start_time }} - {{ rec.end_time }}</li>
+    <li class="list-group-item">{{ rec.date }}: {{ rec.start_time.strftime('%H:%M') }} - {{ rec.end_time.strftime('%H:%M') }} ({{ rec.hours_worked() }} hodín)</li>
 {% endfor %}
 </ul>
 

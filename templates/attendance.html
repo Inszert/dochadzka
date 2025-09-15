@@ -3,29 +3,34 @@
 <h2>Dochádzka</h2>
 <form method="POST" class="row g-3 mb-3">
   <div class="col">
-    <select class="form-select" name="employee_id">
+    <select class="form-select" name="employee_id" required>
+      <option value="">Vyberte zamestnanca</option>
       {% for e in employees %}
         <option value="{{ e.id }}">{{ e.name }} {{ e.surname }}</option>
       {% endfor %}
     </select>
   </div>
-  <div class="col"><input class="form-control" type="date" name="date"></div>
-  <div class="col"><input class="form-control" type="time" name="start_time"></div>
-  <div class="col"><input class="form-control" type="time" name="end_time"></div>
+  <div class="col"><input class="form-control" type="date" name="date" required></div>
+  <div class="col"><input class="form-control" type="time" name="start_time" required></div>
+  <div class="col"><input class="form-control" type="time" name="end_time" required></div>
   <div class="col"><button class="btn btn-primary">Pridať</button></div>
 </form>
 
 <table class="table table-bordered">
-  <tr><th>ID</th><th>Zamestnanec</th><th>Dátum</th><th>Od</th><th>Do</th><th>Hodiny</th></tr>
+  <thead>
+    <tr><th>ID</th><th>Zamestnanec</th><th>Dátum</th><th>Od</th><th>Do</th><th>Hodiny</th></tr>
+  </thead>
+  <tbody>
   {% for r in records %}
   <tr>
     <td>{{ r.id }}</td>
     <td>{{ r.employee.name }} {{ r.employee.surname }}</td>
     <td>{{ r.date }}</td>
-    <td>{{ r.start_time }}</td>
-    <td>{{ r.end_time }}</td>
+    <td>{{ r.start_time.strftime('%H:%M') }}</td>
+    <td>{{ r.end_time.strftime('%H:%M') }}</td>
     <td>{{ r.hours_worked() }}</td>
   </tr>
   {% endfor %}
+  </tbody>
 </table>
 {% endblock %}
