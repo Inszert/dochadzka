@@ -2,29 +2,104 @@
 {% block content %}
 <h2>Dochádzka</h2>
 
-<!-- Form to start shift -->
-<form method="POST" class="row g-3 mb-3">
-  <div class="col-md-4">
-    <select class="form-select" name="employee_id" required>
-      <option value="">Vyberte zamestnanca</option>
-      {% for e in employees %}
-        <option value="{{ e.id }}">{{ e.name }} {{ e.surname }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-md-4">
-    <select class="form-select" name="work_location" required>
-      <option value="">Vyberte miesto</option>
-      {% for location in work_locations %}
-        <option value="{{ location }}">{{ location }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-md-4">
-    <button class="btn btn-primary">Začať smenu</button>
-  </div>
-</form>
+<!-- Tabs for different actions -->
+<ul class="nav nav-tabs mb-4" id="attendanceTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="start-tab" data-bs-toggle="tab" data-bs-target="#start" type="button" role="tab">Začať smenu</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="full-tab" data-bs-toggle="tab" data-bs-target="#full" type="button" role="tab">Pridať celú smenu</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="end-tab" data-bs-toggle="tab" data-bs-target="#end" type="button" role="tab">Manuálne ukončiť smenu</button>
+  </li>
+</ul>
 
+<div class="tab-content" id="attendanceTabsContent">
+  <!-- Start Shift Tab -->
+  <div class="tab-pane fade show active" id="start" role="tabpanel">
+    <form method="POST" class="row g-3 mb-4 p-3 bg-light rounded">
+      <input type="hidden" name="start_shift" value="1">
+      <div class="col-md-5">
+        <select class="form-select" name="employee_id" required>
+          <option value="">Vyberte zamestnanca</option>
+          {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.name }} {{ e.surname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5">
+        <select class="form-select" name="work_location" required>
+          <option value="">Vyberte miesto</option>
+          {% for location in work_locations %}
+            <option value="{{ location }}">{{ location }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-primary w-100">Začať smenu</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Full Shift Tab -->
+  <div class="tab-pane fade" id="full" role="tabpanel">
+    <form method="POST" class="row g-3 mb-4 p-3 bg-light rounded">
+      <input type="hidden" name="full_shift" value="1">
+      <div class="col-md-3">
+        <select class="form-select" name="employee_id_full" required>
+          <option value="">Vyberte zamestnanca</option>
+          {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.name }} {{ e.surname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control" type="date" name="date" value="{{ today }}" required>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control" type="time" name="start_time" required>
+      </div>
+      <div class="col-md-2">
+        <input class="form-control" type="time" name="end_time" required>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select" name="work_location_full" required>
+          <option value="">Vyberte miesto</option>
+          {% for location in work_locations %}
+            <option value="{{ location }}">{{ location }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button class="btn btn-success w-100">Pridať</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Manual End Shift Tab -->
+  <div class="tab-pane fade" id="end" role="tabpanel">
+    <form method="POST" action="/end_shift_manual" class="row g-3 mb-4 p-3 bg-light rounded">
+      <div class="col-md-4">
+        <select class="form-select" name="attendance_id" required>
+          <option value="">Vyberte aktívnu smenu</option>
+          {% for r in records if not r.end_time %}
+            <option value="{{ r.id }}">{{ r.employee.name }} {{ r.employee.surname }} - {{ r.date }} {{ r.start_time.strftime('%H:%M') }} - {{ r.work_location }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input class="form-control" type="time" name="end_time" required>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-warning w-100">Ukončiť smenu</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Attendance Records Table -->
+<h3 class="mt-4">Záznamy dochádzky</h3>
 <table class="table table-bordered table-striped">
   <thead class="table-dark">
     <tr>
@@ -62,7 +137,7 @@
     </td>
     <td>
       {% if not r.end_time %}
-        <a href="/end_shift/{{ r.id }}" class="btn btn-sm btn-success">Ukončiť</a>
+        <a href="/end_shift/{{ r.id }}" class="btn btn-sm btn-success">Ukončiť teraz</a>
       {% endif %}
       <a href="/edit_attendance/{{ r.id }}" class="btn btn-sm btn-warning">Edit</a>
       <a href="/delete_attendance/{{ r.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Naozaj chcete odstrániť tento záznam?')">Delete</a>

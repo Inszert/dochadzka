@@ -105,34 +105,92 @@ def api_end_shift():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Web interface for starting shift
+# Web interface for starting shift# ... existing imports and code ...
+
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     if request.method == "POST":
-        employee_id = request.form.get("employee_id")
-        work_location = request.form.get("work_location")
+        # Check which form was submitted
+        if 'start_shift' in request.form:
+            # Start shift only
+            employee_id = request.form.get("employee_id")
+            work_location = request.form.get("work_location")
+            
+            if employee_id and work_location:
+                now = datetime.now()
+                record = Attendance(
+                    employee_id=employee_id,
+                    date=now.date(),
+                    start_time=now.time(),
+                    work_location=work_location,
+                    status='active'
+                )
+                db.session.add(record)
+                db.session.commit()
+                flash("Začiatok smeny bol zaznamenaný", "success")
+            else:
+                flash("Všetky polia sú povinné", "danger")
         
-        if employee_id and work_location:
-            now = datetime.now()
-            record = Attendance(
-                employee_id=employee_id,
-                date=now.date(),
-                start_time=now.time(),
-                work_location=work_location,
-                status='active'
-            )
-            db.session.add(record)
-            db.session.commit()
-            flash("Začiatok smeny bol zaznamenaný", "success")
-        else:
-            flash("Všetky polia sú povinné", "danger")
+        elif 'full_shift' in request.form:
+            # Full shift with manual times
+            employee_id = request.form.get("employee_id_full")
+            date_str = request.form.get("date")
+            start_time_str = request.form.get("start_time")
+            end_time_str = request.form.get("end_time")
+            work_location = request.form.get("work_location_full")
+            
+            if employee_id and date_str and start_time_str and end_time_str and work_location:
+                date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                start_time = datetime.strptime(start_time_str, "%H:%M").time()
+                end_time = datetime.strptime(end_time_str, "%H:%M").time()
+                
+                record = Attendance(
+                    employee_id=employee_id,
+                    date=date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    work_location=work_location,
+                    status='completed'
+                )
+                db.session.add(record)
+                db.session.commit()
+                flash("Celá smena bola zaznamenaná", "success")
+            else:
+                flash("Všetky polia sú povinné", "danger")
         
         return redirect("/attendance")
     
     records = Attendance.query.order_by(Attendance.date.desc(), Attendance.start_time.desc()).all()
     employees = Employee.query.all()
     work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
-    return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)
+    
+    # Get today's date for the form
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    return render_template("attendance.html", records=records, employees=employees, 
+                         work_locations=work_locations, today=today)
+
+@app.route("/end_shift_manual", methods=["POST"])
+def end_shift_manual():
+    attendance_id = request.form.get("attendance_id")
+    end_time_str = request.form.get("end_time")
+    
+    if attendance_id and end_time_str:
+        record = Attendance.query.get(attendance_id)
+        if record:
+            end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            record.end_time = end_time
+            record.status = 'completed'
+            db.session.commit()
+            flash("Koniec smeny bol manuálne zaznamenaný", "success")
+        else:
+            flash("Záznam nebol nájdený", "danger")
+    else:
+        flash("Čas konca je povinný", "danger")
+    
+    return redirect("/attendance")
+
+# ... keep the other routes the same ...
 
 # Web interface for ending shift
 @app.route("/end_shift/<int:record_id>")
