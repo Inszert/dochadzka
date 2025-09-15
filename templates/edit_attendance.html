@@ -13,15 +13,15 @@
   </div>
   <div class="col-md-6">
     <label class="form-label">Dátum</label>
-    <input class="form-control" type="date" name="date" value="{{ record.date }}" required>
+    <input class="form-control" type="date" name="date" value="{{ date_formatted }}" required>
   </div>
   <div class="col-md-6">
     <label class="form-label">Čas začiatku</label>
-    <input class="form-control" type="time" name="start_time" value="{{ record.start_time.strftime('%H:%M') }}" required>
+    <input class="form-control" type="time" name="start_time" value="{{ start_time_formatted }}" required>
   </div>
   <div class="col-md-6">
-    <label class="form-label">Čas konca</label>
-    <input class="form-control" type="time" name="end_time" value="{{ record.end_time.strftime('%H:%M') }}" required>
+    <label class="form-label">Čas konca (nepovinné)</label>
+    <input class="form-control" type="time" name="end_time" value="{{ end_time_formatted }}">
   </div>
   <div class="col-md-6">
     <label class="form-label">Miesto práce</label>

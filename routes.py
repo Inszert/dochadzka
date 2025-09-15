@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash
+from flask import render_template, request, redirect, url_for, flash, jsonify
 from app import app
 from models import db, Employee, Attendance
 from datetime import datetime
@@ -12,10 +12,9 @@ def employees():
     if request.method == "POST":
         name = request.form.get("name")
         surname = request.form.get("surname")
-        # workplace parameter removed
         
         if name and surname:
-            emp = Employee(name=name, surname=surname)  # workplace removed
+            emp = Employee(name=name, surname=surname)
             db.session.add(emp)
             db.session.commit()
             flash("Zamestnanec bol pridaný", "success")
@@ -27,39 +26,129 @@ def employees():
     all_emps = Employee.query.all()
     return render_template("employees.html", all_emps=all_emps)
 
+# API endpoint for ESP32 to start shift
+@app.route("/api/start_shift", methods=["POST"])
+def api_start_shift():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        employee_id = data.get("employee_id")
+        work_location = data.get("work_location", "Zoo")
+        
+        if not employee_id:
+            return jsonify({"error": "Employee ID is required"}), 400
+        
+        # Create new attendance record with start time only
+        now = datetime.now()
+        record = Attendance(
+            employee_id=employee_id,
+            date=now.date(),
+            start_time=now.time(),
+            work_location=work_location,
+            status='active'
+        )
+        
+        db.session.add(record)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "attendance_id": record.id,
+            "message": "Shift started successfully"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API endpoint for ESP32 to end shift
+@app.route("/api/end_shift", methods=["POST"])
+def api_end_shift():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        attendance_id = data.get("attendance_id")
+        employee_id = data.get("employee_id")
+        
+        if not attendance_id and not employee_id:
+            return jsonify({"error": "Either attendance_id or employee_id is required"}), 400
+        
+        # Find the active shift
+        if attendance_id:
+            record = Attendance.query.get(attendance_id)
+        else:
+            # Find the latest active shift for this employee
+            record = Attendance.query.filter_by(
+                employee_id=employee_id, 
+                status='active'
+            ).order_by(Attendance.id.desc()).first()
+        
+        if not record:
+            return jsonify({"error": "No active shift found"}), 404
+        
+        # Update with end time
+        now = datetime.now()
+        record.end_time = now.time()
+        record.status = 'completed'
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "hours_worked": record.hours_worked(),
+            "message": "Shift ended successfully"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Web interface for starting shift
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     if request.method == "POST":
         employee_id = request.form.get("employee_id")
-        date_str = request.form.get("date")
-        start_time_str = request.form.get("start_time")
-        end_time_str = request.form.get("end_time")
         work_location = request.form.get("work_location")
         
-        if employee_id and date_str and start_time_str and end_time_str and work_location:
-            date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            start_time = datetime.strptime(start_time_str, "%H:%M").time()
-            end_time = datetime.strptime(end_time_str, "%H:%M").time()
-            
+        if employee_id and work_location:
+            now = datetime.now()
             record = Attendance(
                 employee_id=employee_id,
-                date=date,
-                start_time=start_time,
-                end_time=end_time,
-                work_location=work_location
+                date=now.date(),
+                start_time=now.time(),
+                work_location=work_location,
+                status='active'
             )
             db.session.add(record)
             db.session.commit()
-            flash("Záznam bol pridaný", "success")
+            flash("Začiatok smeny bol zaznamenaný", "success")
         else:
             flash("Všetky polia sú povinné", "danger")
         
         return redirect("/attendance")
     
-    records = Attendance.query.order_by(Attendance.date.desc()).all()
+    records = Attendance.query.order_by(Attendance.date.desc(), Attendance.start_time.desc()).all()
     employees = Employee.query.all()
     work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
     return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)
+
+# Web interface for ending shift
+@app.route("/end_shift/<int:record_id>")
+def end_shift(record_id):
+    record = Attendance.query.get_or_404(record_id)
+    
+    if record.end_time:
+        flash("Táto smena už bola ukončená", "warning")
+    else:
+        now = datetime.now()
+        record.end_time = now.time()
+        record.status = 'completed'
+        db.session.commit()
+        flash("Koniec smeny bol zaznamenaný", "success")
+    
+    return redirect("/attendance")
 
 @app.route("/edit_attendance/<int:record_id>", methods=["GET", "POST"])
 def edit_attendance(record_id):
@@ -74,23 +163,30 @@ def edit_attendance(record_id):
         end_time_str = request.form.get("end_time")
         work_location = request.form.get("work_location")
         
-        if employee_id and date_str and start_time_str and end_time_str and work_location:
+        if employee_id and date_str and start_time_str and work_location:
             record.employee_id = employee_id
             record.date = datetime.strptime(date_str, "%Y-%m-%d").date()
             record.start_time = datetime.strptime(start_time_str, "%H:%M").time()
-            record.end_time = datetime.strptime(end_time_str, "%H:%M").time()
             record.work_location = work_location
+            
+            # Handle end time (can be empty)
+            if end_time_str:
+                record.end_time = datetime.strptime(end_time_str, "%H:%M").time()
+                record.status = 'completed'
+            else:
+                record.end_time = None
+                record.status = 'active'
             
             db.session.commit()
             flash("Záznam bol upravený", "success")
             return redirect("/attendance")
         else:
-            flash("Všetky polia sú povinné", "danger")
+            flash("Zamestnanec, dátum, čas začiatku a miesto sú povinné", "danger")
     
     # Format dates and times for the form inputs
     date_formatted = record.date.strftime('%Y-%m-%d')
     start_time_formatted = record.start_time.strftime('%H:%M')
-    end_time_formatted = record.end_time.strftime('%H:%M')
+    end_time_formatted = record.end_time.strftime('%H:%M') if record.end_time else ''
     
     return render_template("edit_attendance.html", 
                           record=record, 
@@ -99,7 +195,6 @@ def edit_attendance(record_id):
                           date_formatted=date_formatted,
                           start_time_formatted=start_time_formatted,
                           end_time_formatted=end_time_formatted)
-
 @app.route("/delete_attendance/<int:record_id>")
 def delete_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)

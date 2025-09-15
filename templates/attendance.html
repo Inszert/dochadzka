@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Dochádzka</h2>
+
+<!-- Form to start shift -->
 <form method="POST" class="row g-3 mb-3">
-  <div class="col-md-2">
+  <div class="col-md-4">
     <select class="form-select" name="employee_id" required>
       <option value="">Vyberte zamestnanca</option>
       {% for e in employees %}
@@ -10,10 +12,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-2"><input class="form-control" type="date" name="date" required value="{{ now }}"></div>
-  <div class="col-md-2"><input class="form-control" type="time" name="start_time" required></div>
-  <div class="col-md-2"><input class="form-control" type="time" name="end_time" required></div>
-  <div class="col-md-2">
+  <div class="col-md-4">
     <select class="form-select" name="work_location" required>
       <option value="">Vyberte miesto</option>
       {% for location in work_locations %}
@@ -21,7 +20,9 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-2"><button class="btn btn-primary">Pridať</button></div>
+  <div class="col-md-4">
+    <button class="btn btn-primary">Začať smenu</button>
+  </div>
 </form>
 
 <table class="table table-bordered table-striped">
@@ -29,10 +30,11 @@
     <tr>
       <th>Zamestnanec</th>
       <th>Dátum</th>
-      <th>Od</th>
-      <th>Do</th>
+      <th>Začiatok</th>
+      <th>Koniec</th>
       <th>Hodiny</th>
       <th>Miesto</th>
+      <th>Status</th>
       <th>Akcie</th>
     </tr>
   </thead>
@@ -42,10 +44,26 @@
     <td>{{ r.employee.name }} {{ r.employee.surname }}</td>
     <td>{{ r.date }}</td>
     <td>{{ r.start_time.strftime('%H:%M') }}</td>
-    <td>{{ r.end_time.strftime('%H:%M') }}</td>
+    <td>
+      {% if r.end_time %}
+        {{ r.end_time.strftime('%H:%M') }}
+      {% else %}
+        <span class="text-muted">Prebieha...</span>
+      {% endif %}
+    </td>
     <td>{{ r.hours_worked() }}</td>
     <td>{{ r.work_location }}</td>
     <td>
+      {% if r.end_time %}
+        <span class="badge bg-success">Dokončené</span>
+      {% else %}
+        <span class="badge bg-warning text-dark">Aktívne</span>
+      {% endif %}
+    </td>
+    <td>
+      {% if not r.end_time %}
+        <a href="/end_shift/{{ r.id }}" class="btn btn-sm btn-success">Ukončiť</a>
+      {% endif %}
       <a href="/edit_attendance/{{ r.id }}" class="btn btn-sm btn-warning">Edit</a>
       <a href="/delete_attendance/{{ r.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Naozaj chcete odstrániť tento záznam?')">Delete</a>
     </td>
@@ -53,4 +71,31 @@
   {% endfor %}
   </tbody>
 </table>
+
+<!-- API Documentation -->
+<div class="card mt-4">
+  <div class="card-header">
+    <h5>API pre ESP32</h5>
+  </div>
+  <div class="card-body">
+    <p>Pre používanie s ESP32 použite tieto endpointy:</p>
+    
+    <h6>Začať smenu:</h6>
+    <code>POST /api/start_shift</code>
+    <pre>{
+  "employee_id": 1,
+  "work_location": "Zoo"
+}</pre>
+    
+    <h6>Ukončiť smenu:</h6>
+    <code>POST /api/end_shift</code>
+    <pre>{
+  "attendance_id": 5
+}</pre>
+    alebo
+    <pre>{
+  "employee_id": 1
+}</pre>
+  </div>
+</div>
 {% endblock %}
