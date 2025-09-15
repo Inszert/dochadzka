@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, render_template_string, flash
+from flask import render_template, request, redirect, url_for, flash
 from app import app
 from models import db, Employee, Attendance
 from datetime import datetime
@@ -58,14 +58,14 @@ def attendance():
     
     records = Attendance.query.order_by(Attendance.date.desc()).all()
     employees = Employee.query.all()
-    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa"]  # Example locations
+    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
     return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)
 
 @app.route("/edit_attendance/<int:record_id>", methods=["GET", "POST"])
 def edit_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)
     employees = Employee.query.all()
-    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa"]
+    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
     
     if request.method == "POST":
         employee_id = request.form.get("employee_id")
@@ -87,7 +87,18 @@ def edit_attendance(record_id):
         else:
             flash("Všetky polia sú povinné", "danger")
     
-    return render_template("edit_attendance.html", record=record, employees=employees, work_locations=work_locations)
+    # Format dates and times for the form inputs
+    date_formatted = record.date.strftime('%Y-%m-%d')
+    start_time_formatted = record.start_time.strftime('%H:%M')
+    end_time_formatted = record.end_time.strftime('%H:%M')
+    
+    return render_template("edit_attendance.html", 
+                          record=record, 
+                          employees=employees, 
+                          work_locations=work_locations,
+                          date_formatted=date_formatted,
+                          start_time_formatted=start_time_formatted,
+                          end_time_formatted=end_time_formatted)
 
 @app.route("/delete_attendance/<int:record_id>")
 def delete_attendance(record_id):
@@ -143,3 +154,34 @@ def report(emp_id):
         total_hours += rec.hours_worked()
     
     return render_template("report.html", emp=emp, records=records, total_hours=total_hours)
+
+# Additional route for filtering attendance by date
+@app.route("/attendance_filter", methods=["GET", "POST"])
+def attendance_filter():
+    records = Attendance.query
+    employees = Employee.query.all()
+    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
+    
+    if request.method == "POST":
+        start_date_str = request.form.get("start_date")
+        end_date_str = request.form.get("end_date")
+        employee_id = request.form.get("employee_id")
+        location = request.form.get("location")
+        
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+            records = records.filter(Attendance.date >= start_date)
+        
+        if end_date_str:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            records = records.filter(Attendance.date <= end_date)
+            
+        if employee_id and employee_id != "all":
+            records = records.filter(Attendance.employee_id == employee_id)
+            
+        if location and location != "all":
+            records = records.filter(Attendance.work_location == location)
+    
+    records = records.order_by(Attendance.date.desc()).all()
+    
+    return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)
