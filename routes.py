@@ -12,10 +12,10 @@ def employees():
     if request.method == "POST":
         name = request.form.get("name")
         surname = request.form.get("surname")
-        workplace = request.form.get("workplace")
+        # workplace parameter removed
         
         if name and surname:
-            emp = Employee(name=name, surname=surname, workplace=workplace)
+            emp = Employee(name=name, surname=surname)  # workplace removed
             db.session.add(emp)
             db.session.commit()
             flash("Zamestnanec bol pridaný", "success")
