@@ -6,6 +6,10 @@ from datetime import datetime
 @app.route("/")
 def home():
     return render_template("index.html")
+@app.route("/documentation")
+def documentation():
+    return render_template("docu.html")
+
 
 @app.route("/employees", methods=["GET", "POST"])
 def employees():
