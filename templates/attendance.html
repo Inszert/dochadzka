@@ -20,7 +20,7 @@
   <div class="tab-pane fade show active" id="start" role="tabpanel">
     <form method="POST" class="row g-3 mb-4 p-3 bg-light rounded">
       <input type="hidden" name="start_shift" value="1">
-      <div class="col-md-5">
+      <div class="col-md-4">
         <select class="form-select" name="employee_id" required>
           <option value="">Vyberte zamestnanca</option>
           {% for e in employees %}
@@ -28,15 +28,10 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-5">
-        <select class="form-select" name="work_location" required>
-          <option value="">Vyberte miesto</option>
-          {% for location in work_locations %}
-            <option value="{{ location }}">{{ location }}</option>
-          {% endfor %}
-        </select>
+      <div class="col-md-4">
+        <input type="text" class="form-control" name="work_location" placeholder="Miesto práce (napr. Zoo, Spa...)" required>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-4">
         <button class="btn btn-primary w-100">Začať smenu</button>
       </div>
     </form>
@@ -64,12 +59,7 @@
         <input class="form-control" type="time" name="end_time" required>
       </div>
       <div class="col-md-2">
-        <select class="form-select" name="work_location_full" required>
-          <option value="">Vyberte miesto</option>
-          {% for location in work_locations %}
-            <option value="{{ location }}">{{ location }}</option>
-          {% endfor %}
-        </select>
+        <input type="text" class="form-control" name="work_location_full" placeholder="Miesto práce" required>
       </div>
       <div class="col-md-1">
         <button class="btn btn-success w-100">Pridať</button>
@@ -155,14 +145,21 @@
   <div class="card-body">
     <p>Pre používanie s ESP32 použite tieto endpointy:</p>
     
-    <h6>Začať smenu:</h6>
+    <h6>Začať smenu pomocou ID:</h6>
     <code>POST /api/start_shift</code>
     <pre>{
   "employee_id": 1,
   "work_location": "Zoo"
 }</pre>
     
-    <h6>Ukončiť smenu:</h6>
+    <h6>Začať smenu pomocou mena:</h6>
+    <code>POST /api/start_shift_by_name</code>
+    <pre>{
+  "employee_name": "Janko Mrkvička",
+  "work_location": "Spa"
+}</pre>
+    
+    <h6>Ukončiť smenu pomocou ID:</h6>
     <code>POST /api/end_shift</code>
     <pre>{
   "attendance_id": 5
@@ -171,6 +168,17 @@
     <pre>{
   "employee_id": 1
 }</pre>
+    
+    <h6>Ukončiť smenu pomocou mena:</h6>
+    <code>POST /api/end_shift_by_name</code>
+    <pre>{
+  "employee_name": "Janko Mrkvička"
+}</pre>
+    
+    <p class="text-muted mt-3">
+      <strong>Poznámka:</strong> Pri používaní mien systém hľadá zamestnanca podľa mena a priezviska. 
+      Ak zadáte iba jedno slovo, systém sa pokúsi nájsť zhobu v meni alebo priezvisku.
+    </p>
   </div>
 </div>
 {% endblock %}

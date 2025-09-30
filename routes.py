@@ -26,7 +26,170 @@ def employees():
     all_emps = Employee.query.all()
     return render_template("employees.html", all_emps=all_emps)
 
-# API endpoint for ESP32 to start shift
+# Smart API endpoint that automatically starts or ends shift based on employee ID
+@app.route("/api/shift", methods=["POST"])
+def api_shift():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        employee_id = data.get("employee_id")
+        work_location = data.get("work_location", "Unknown")
+        
+        if not employee_id:
+            return jsonify({"error": "Employee ID is required"}), 400
+        
+        # Check if employee exists
+        employee = Employee.query.get(employee_id)
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+        
+        # Check if employee has an active shift
+        active_shift = Attendance.query.filter_by(
+            employee_id=employee_id, 
+            status='active'
+        ).order_by(Attendance.id.desc()).first()
+        
+        if active_shift:
+            # End the active shift
+            now = datetime.now()
+            active_shift.end_time = now.time()
+            active_shift.status = 'completed'
+            
+            hours_worked = active_shift.hours_worked()
+            
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "action": "ended",
+                "attendance_id": active_shift.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "hours_worked": hours_worked,
+                "start_time": active_shift.start_time.strftime('%H:%M'),
+                "end_time": active_shift.end_time.strftime('%H:%M'),
+                "message": "Shift ended successfully"
+            }), 200
+        else:
+            # Start a new shift
+            if not work_location:
+                return jsonify({"error": "Work location is required to start a shift"}), 400
+            
+            now = datetime.now()
+            record = Attendance(
+                employee_id=employee_id,
+                date=now.date(),
+                start_time=now.time(),
+                work_location=work_location,
+                status='active'
+            )
+            
+            db.session.add(record)
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "action": "started",
+                "attendance_id": record.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "work_location": work_location,
+                "start_time": record.start_time.strftime('%H:%M'),
+                "message": "Shift started successfully"
+            }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Smart API endpoint that automatically starts or ends shift based on employee name
+@app.route("/api/shift_by_name", methods=["POST"])
+def api_shift_by_name():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        employee_name = data.get("employee_name")
+        work_location = data.get("work_location", "Unknown")
+        
+        if not employee_name:
+            return jsonify({"error": "Employee name is required"}), 400
+        
+        # Find employee by name
+        name_parts = employee_name.strip().split(' ', 1)
+        if len(name_parts) == 2:
+            name, surname = name_parts
+            employee = Employee.query.filter_by(name=name, surname=surname).first()
+        else:
+            # Try to find by name only
+            search_name = name_parts[0]
+            employee = Employee.query.filter(
+                (Employee.name.ilike(f"%{search_name}%")) | 
+                (Employee.surname.ilike(f"%{search_name}%"))
+            ).first()
+        
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+        
+        # Check if employee has an active shift
+        active_shift = Attendance.query.filter_by(
+            employee_id=employee.id, 
+            status='active'
+        ).order_by(Attendance.id.desc()).first()
+        
+        if active_shift:
+            # End the active shift
+            now = datetime.now()
+            active_shift.end_time = now.time()
+            active_shift.status = 'completed'
+            
+            hours_worked = active_shift.hours_worked()
+            
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "action": "ended",
+                "attendance_id": active_shift.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "hours_worked": hours_worked,
+                "start_time": active_shift.start_time.strftime('%H:%M'),
+                "end_time": active_shift.end_time.strftime('%H:%M'),
+                "message": "Shift ended successfully"
+            }), 200
+        else:
+            # Start a new shift
+            if not work_location:
+                return jsonify({"error": "Work location is required to start a shift"}), 400
+            
+            now = datetime.now()
+            record = Attendance(
+                employee_id=employee.id,
+                date=now.date(),
+                start_time=now.time(),
+                work_location=work_location,
+                status='active'
+            )
+            
+            db.session.add(record)
+            db.session.commit()
+            
+            return jsonify({
+                "success": True,
+                "action": "started",
+                "attendance_id": record.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "work_location": work_location,
+                "start_time": record.start_time.strftime('%H:%M'),
+                "message": "Shift started successfully"
+            }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API endpoint for ESP32 to start shift with employee ID
 @app.route("/api/start_shift", methods=["POST"])
 def api_start_shift():
     try:
@@ -35,10 +198,18 @@ def api_start_shift():
             return jsonify({"error": "No JSON data provided"}), 400
             
         employee_id = data.get("employee_id")
-        work_location = data.get("work_location", "Zoo")
+        work_location = data.get("work_location", "Unknown")
         
         if not employee_id:
             return jsonify({"error": "Employee ID is required"}), 400
+        
+        if not work_location:
+            return jsonify({"error": "Work location is required"}), 400
+        
+        # Check if employee exists
+        employee = Employee.query.get(employee_id)
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
         
         # Create new attendance record with start time only
         now = datetime.now()
@@ -56,13 +227,71 @@ def api_start_shift():
         return jsonify({
             "success": True,
             "attendance_id": record.id,
+            "employee_name": f"{employee.name} {employee.surname}",
             "message": "Shift started successfully"
         }), 200
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# API endpoint for ESP32 to end shift
+# API endpoint for ESP32 to start shift with employee name
+@app.route("/api/start_shift_by_name", methods=["POST"])
+def api_start_shift_by_name():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        employee_name = data.get("employee_name")
+        work_location = data.get("work_location", "Unknown")
+        
+        if not employee_name:
+            return jsonify({"error": "Employee name is required"}), 400
+        
+        if not work_location:
+            return jsonify({"error": "Work location is required"}), 400
+        
+        # Find employee by name (split into name and surname if possible)
+        name_parts = employee_name.strip().split(' ', 1)
+        if len(name_parts) == 2:
+            name, surname = name_parts
+            employee = Employee.query.filter_by(name=name, surname=surname).first()
+        else:
+            # Try to find by name only (search in both name and surname fields)
+            search_name = name_parts[0]
+            employee = Employee.query.filter(
+                (Employee.name.ilike(f"%{search_name}%")) | 
+                (Employee.surname.ilike(f"%{search_name}%"))
+            ).first()
+        
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+        
+        # Create new attendance record with start time only
+        now = datetime.now()
+        record = Attendance(
+            employee_id=employee.id,
+            date=now.date(),
+            start_time=now.time(),
+            work_location=work_location,
+            status='active'
+        )
+        
+        db.session.add(record)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "attendance_id": record.id,
+            "employee_id": employee.id,
+            "employee_name": f"{employee.name} {employee.surname}",
+            "message": "Shift started successfully"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API endpoint for ESP32 to end shift with employee ID
 @app.route("/api/end_shift", methods=["POST"])
 def api_end_shift():
     try:
@@ -79,15 +308,16 @@ def api_end_shift():
         # Find the active shift
         if attendance_id:
             record = Attendance.query.get(attendance_id)
+            if not record:
+                return jsonify({"error": "Attendance record not found"}), 404
         else:
             # Find the latest active shift for this employee
             record = Attendance.query.filter_by(
                 employee_id=employee_id, 
                 status='active'
             ).order_by(Attendance.id.desc()).first()
-        
-        if not record:
-            return jsonify({"error": "No active shift found"}), 404
+            if not record:
+                return jsonify({"error": "No active shift found for this employee"}), 404
         
         # Update with end time
         now = datetime.now()
@@ -99,14 +329,69 @@ def api_end_shift():
         return jsonify({
             "success": True,
             "hours_worked": record.hours_worked(),
+            "employee_name": f"{record.employee.name} {record.employee.surname}",
             "message": "Shift ended successfully"
         }), 200
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Web interface for starting shift# ... existing imports and code ...
+# API endpoint for ESP32 to end shift with employee name
+@app.route("/api/end_shift_by_name", methods=["POST"])
+def api_end_shift_by_name():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+            
+        employee_name = data.get("employee_name")
+        
+        if not employee_name:
+            return jsonify({"error": "Employee name is required"}), 400
+        
+        # Find employee by name
+        name_parts = employee_name.strip().split(' ', 1)
+        if len(name_parts) == 2:
+            name, surname = name_parts
+            employee = Employee.query.filter_by(name=name, surname=surname).first()
+        else:
+            # Try to find by name only
+            search_name = name_parts[0]
+            employee = Employee.query.filter(
+                (Employee.name.ilike(f"%{search_name}%")) | 
+                (Employee.surname.ilike(f"%{search_name}%"))
+            ).first()
+        
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+        
+        # Find the latest active shift for this employee
+        record = Attendance.query.filter_by(
+            employee_id=employee.id, 
+            status='active'
+        ).order_by(Attendance.id.desc()).first()
+        
+        if not record:
+            return jsonify({"error": "No active shift found for this employee"}), 404
+        
+        # Update with end time
+        now = datetime.now()
+        record.end_time = now.time()
+        record.status = 'completed'
+        
+        db.session.commit()
+        
+        return jsonify({
+            "success": True,
+            "hours_worked": record.hours_worked(),
+            "employee_name": f"{employee.name} {employee.surname}",
+            "message": "Shift ended successfully"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+# Web interface for starting shift
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     if request.method == "POST":
@@ -162,13 +447,11 @@ def attendance():
     
     records = Attendance.query.order_by(Attendance.date.desc(), Attendance.start_time.desc()).all()
     employees = Employee.query.all()
-    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
     
     # Get today's date for the form
     today = datetime.now().strftime('%Y-%m-%d')
     
-    return render_template("attendance.html", records=records, employees=employees, 
-                         work_locations=work_locations, today=today)
+    return render_template("attendance.html", records=records, employees=employees, today=today)
 
 @app.route("/end_shift_manual", methods=["POST"])
 def end_shift_manual():
@@ -190,9 +473,6 @@ def end_shift_manual():
     
     return redirect("/attendance")
 
-# ... keep the other routes the same ...
-
-# Web interface for ending shift
 @app.route("/end_shift/<int:record_id>")
 def end_shift(record_id):
     record = Attendance.query.get_or_404(record_id)
@@ -212,7 +492,6 @@ def end_shift(record_id):
 def edit_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)
     employees = Employee.query.all()
-    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
     
     if request.method == "POST":
         employee_id = request.form.get("employee_id")
@@ -248,11 +527,11 @@ def edit_attendance(record_id):
     
     return render_template("edit_attendance.html", 
                           record=record, 
-                          employees=employees, 
-                          work_locations=work_locations,
+                          employees=employees,
                           date_formatted=date_formatted,
                           start_time_formatted=start_time_formatted,
                           end_time_formatted=end_time_formatted)
+
 @app.route("/delete_attendance/<int:record_id>")
 def delete_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)
@@ -268,7 +547,6 @@ def edit_employee(emp_id):
     if request.method == "POST":
         emp.name = request.form.get("name")
         emp.surname = request.form.get("surname")
-        emp.workplace = request.form.get("workplace")
         db.session.commit()
         flash("Zamestnanec bol upravený", "success")
         return redirect("/employees")
@@ -307,34 +585,3 @@ def report(emp_id):
         total_hours += rec.hours_worked()
     
     return render_template("report.html", emp=emp, records=records, total_hours=total_hours)
-
-# Additional route for filtering attendance by date
-@app.route("/attendance_filter", methods=["GET", "POST"])
-def attendance_filter():
-    records = Attendance.query
-    employees = Employee.query.all()
-    work_locations = ["Zoo", "Spa", "Kancelária", "Sklad", "Predajňa", "Restaurácia", "Hotel", "Divadlo"]
-    
-    if request.method == "POST":
-        start_date_str = request.form.get("start_date")
-        end_date_str = request.form.get("end_date")
-        employee_id = request.form.get("employee_id")
-        location = request.form.get("location")
-        
-        if start_date_str:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            records = records.filter(Attendance.date >= start_date)
-        
-        if end_date_str:
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            records = records.filter(Attendance.date <= end_date)
-            
-        if employee_id and employee_id != "all":
-            records = records.filter(Attendance.employee_id == employee_id)
-            
-        if location and location != "all":
-            records = records.filter(Attendance.work_location == location)
-    
-    records = records.order_by(Attendance.date.desc()).all()
-    
-    return render_template("attendance.html", records=records, employees=employees, work_locations=work_locations)

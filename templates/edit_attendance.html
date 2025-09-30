@@ -25,12 +25,7 @@
   </div>
   <div class="col-md-6">
     <label class="form-label">Miesto práce</label>
-    <select class="form-select" name="work_location" required>
-      <option value="">Vyberte miesto</option>
-      {% for location in work_locations %}
-        <option value="{{ location }}" {% if location == record.work_location %}selected{% endif %}>{{ location }}</option>
-      {% endfor %}
-    </select>
+    <input type="text" class="form-control" name="work_location" value="{{ record.work_location }}" required>
   </div>
   <div class="col-12 mt-4">
     <button type="submit" class="btn btn-success">Uložiť zmeny</button>

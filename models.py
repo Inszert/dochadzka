@@ -14,9 +14,9 @@ class Attendance(db.Model):
     employee_id = db.Column(db.Integer, db.ForeignKey('employee.id'))
     date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
-    end_time = db.Column(db.Time, nullable=True)  # Changed to allow NULL
+    end_time = db.Column(db.Time, nullable=True)
     work_location = db.Column(db.String(100), nullable=False)
-    status = db.Column(db.String(20), default='active')  # active, completed
+    status = db.Column(db.String(20), default='active')
     
     employee = db.relationship("Employee", backref="attendances")
 
