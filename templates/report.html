@@ -16,6 +16,8 @@
 <h2>Dochádzka</h2>
 <ul class="list-group">
 {% for rec in records %}
+
+
     <li class="list-group-item">
         {{ rec.date }}: {{ rec.start_time.strftime('%H:%M') }} - {{ rec.end_time.strftime('%H:%M') }} 
         ({{ rec.hours_worked() }} hodín) - {{ rec.work_location }}

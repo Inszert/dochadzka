@@ -24,9 +24,8 @@ from routes import *
 
 if __name__ == "__main__":
     with app.app_context():
-        # Create all database tables
         db.create_all()
         print("Database tables created successfully!")
-    
-    # Run the application
-    app.run(host="0.0.0.0", port=8000, debug=True)
+
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
