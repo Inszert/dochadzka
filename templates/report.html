@@ -1,29 +1,114 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+  /* Custom card colors and spacing */
+  .attendance-card {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+  }
+
+  /* Table styling */
+  table {
+    border-collapse: collapse;
+  }
+  table th, table td {
+    vertical-align: middle;
+    text-align: center;
+  }
+
+  /* Badges for hours */
+  .badge-hours {
+    background-color: #0d6efd;
+    color: white;
+    font-size: 0.9em;
+  }
+
+  /* Form styling */
+  .filter-form .form-control {
+    border-radius: 6px;
+  }
+  .filter-form button {
+    border-radius: 6px;
+  }
+
+  /* Print styling */
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #printable, #printable * {
+      visibility: visible;
+    }
+    #printable {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+    }
+    .no-print {
+      display: none;
+    }
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<h1>Report: {{ emp.name }} {{ emp.surname }}</h1>
-<form method="POST" class="mb-3 row">
-    <div class="col">
-        <label>Od: <input type="date" name="start_date" class="form-control"></label>
+<div class="container my-4" id="printable">
+  <h1 class="mb-4 text-primary">Report: {{ emp.name }} {{ emp.surname }}</h1>
+
+  <!-- Filter Form -->
+  <form method="POST" class="row g-3 mb-4 filter-form no-print">
+    <div class="col-md-3">
+      <label class="form-label">Od:</label>
+      <input type="date" name="start_date" class="form-control">
     </div>
-    <div class="col">
-        <label>Do: <input type="date" name="end_date" class="form-control"></label>
+    <div class="col-md-3">
+      <label class="form-label">Do:</label>
+      <input type="date" name="end_date" class="form-control">
     </div>
-    <div class="col">
-        <button type="submit" class="btn btn-primary mt-4">Filter</button>
+    <div class="col-md-2 align-self-end">
+      <button type="submit" class="btn btn-primary w-100">Filter</button>
     </div>
-</form>
+  </form>
 
-<h2>Dochádzka</h2>
-<ul class="list-group">
-{% for rec in records %}
-
-
-    <li class="list-group-item">
-        {{ rec.date }}: {{ rec.start_time.strftime('%H:%M') }} - {{ rec.end_time.strftime('%H:%M') }} 
-        ({{ rec.hours_worked() }} hodín) - {{ rec.work_location }}
-    </li>
-{% endfor %}
-</ul>
-
-<h3>Celkové odpracované hodiny: {{ total_hours }}</h3>
+  <!-- Attendance Table -->
+  <div class="attendance-card">
+    <h2 class="mb-3 text-secondary">Dochádzka</h2>
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>Dátum</th>
+            <th>Začiatok</th>
+            <th>Koniec</th>
+            <th>Hodiny</th>
+            <th>Miesto práce</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rec in records %}
+          <tr>
+            <td>{{ rec.date }}</td>
+            <td>{{ rec.start_time.strftime('%H:%M') }}</td>
+            <td>
+              {% if rec.end_time %}
+                {{ rec.end_time.strftime('%H:%M') }}
+              {% else %}
+                <span class="text-muted">Prebieha...</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-hours">{{ rec.hours_worked() }}</span></td>
+            <td>{{ rec.work_location }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <h4 class="mt-3">Celkové odpracované hodiny: <span class="badge bg-success">{{ total_hours }}</span></h4>
+  </div>
+</div>
 {% endblock %}

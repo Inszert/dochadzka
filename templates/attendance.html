@@ -139,48 +139,5 @@
   </tbody>
 </table>
 
-<!-- API Documentation -->
-<div class="card mt-4">
-  <div class="card-header">
-    <h5>API pre ESP32</h5>
-  </div>
-  <div class="card-body">
-    <p>Pre používanie s ESP32 použite tieto endpointy:</p>
-    
-    <h6>Začať smenu pomocou ID:</h6>
-    <code>POST /api/start_shift</code>
-    <pre>{
-  "employee_id": 1,
-  "work_location": "Zoo"
-}</pre>
-    
-    <h6>Začať smenu pomocou mena:</h6>
-    <code>POST /api/start_shift_by_name</code>
-    <pre>{
-  "employee_name": "Janko Mrkvička",
-  "work_location": "Spa"
-}</pre>
-    
-    <h6>Ukončiť smenu pomocou ID:</h6>
-    <code>POST /api/end_shift</code>
-    <pre>{
-  "attendance_id": 5
-}</pre>
-    alebo
-    <pre>{
-  "employee_id": 1
-}</pre>
-    
-    <h6>Ukončiť smenu pomocou mena:</h6>
-    <code>POST /api/end_shift_by_name</code>
-    <pre>{
-  "employee_name": "Janko Mrkvička"
-}</pre>
-    
-    <p class="text-muted mt-3">
-      <strong>Poznámka:</strong> Pri používaní mien systém hľadá zamestnanca podľa mena a priezviska. 
-      Ak zadáte iba jedno slovo, systém sa pokúsi nájsť zhobu v meni alebo priezvisku.
-    </p>
-  </div>
-</div>
+
 {% endblock %}
