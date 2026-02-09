@@ -12,6 +12,7 @@ r = requests.post(base + '/location/add', json={'name':'Bratislava'})
 print(r.json())
 
 # pridanie dochádzky
+
 r = requests.post(base + '/attendance/add', json={
   'employee_id': 1,
   'location_id': 1,
