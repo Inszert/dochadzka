@@ -9,7 +9,7 @@ database_url = os.environ.get("DATABASE_URL")
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = database_url or "sqlite:///attendance.db"
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
@@ -24,8 +24,11 @@ from routes import *
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
-        print("Database tables created successfully!")
+        try:
+            db.create_all()
+            print("Database tables created successfully!")
+        except Exception as e:
+            print("Database initialization error:", e)
 
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
