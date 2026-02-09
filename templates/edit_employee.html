@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Edit zamestnanca</h1>
+{% include "_nav.html" %}
 <form method="POST">
     <input name="name" value="{{ emp.name }}" class="form-control mb-2">
     <input name="surname" value="{{ emp.surname }}" class="form-control mb-2">
