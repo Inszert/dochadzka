@@ -2,6 +2,12 @@
 {% block content %}
 <h2>Dochádzka</h2>
 
+<div class="d-grid gap-2 d-md-block">
+    <a class="btn btn-primary" href="{{ url_for('employees') }}">Zamestnanci</a>
+    <a class="btn btn-secondary" href="{{ url_for('attendance') }}">Dochádzka</a>
+    <a class="btn btn-info" href="{{ url_for('documentation') }}">API Dokumentácia</a>
+</div>
+
 <!-- Tabs for different actions -->
 <ul class="nav nav-tabs mb-4" id="attendanceTabs" role="tablist">
   <li class="nav-item" role="presentation">
