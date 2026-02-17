@@ -30,6 +30,103 @@ def employees():
     all_emps = Employee.query.all()
     return render_template("employees.html", all_emps=all_emps)
 
+
+
+from flask import request, jsonify
+from datetime import datetime, timezone, timedelta
+from app import app
+from models import db, Employee, Attendance
+
+@app.route("/api/shift_by_name_with_time", methods=["POST"])
+def api_shift_by_name_with_time():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        employee_name = data.get("employee_name")
+        work_location = data.get("work_location", "Unknown")
+        shift_time_str = data.get("time")  # Expecting ISO format: "2026-02-17T19:30:00"
+
+        if not employee_name:
+            return jsonify({"error": "Employee name is required"}), 400
+
+        # Parse the provided time or fallback to server time
+        try:
+            shift_time = datetime.fromisoformat(shift_time_str)
+        except:
+            shift_time = datetime.now(timezone(timedelta(hours=1)))
+
+        # Split name
+        name_parts = employee_name.strip().split(' ', 1)
+        if len(name_parts) == 2:
+            name, surname = name_parts
+            employee = Employee.query.filter_by(name=name, surname=surname).first()
+        else:
+            search_name = name_parts[0]
+            employee = Employee.query.filter(
+                (Employee.name.ilike(f"%{search_name}%")) |
+                (Employee.surname.ilike(f"%{search_name}%"))
+            ).first()
+
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+
+        # Check for active shift
+        active_shift = Attendance.query.filter_by(
+            employee_id=employee.id,
+            status='active'
+        ).order_by(Attendance.id.desc()).first()
+
+        if active_shift:
+            # End shift using API-provided time
+            active_shift.end_time = shift_time.time()
+            active_shift.status = 'completed'
+            hours_worked = active_shift.hours_worked()
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "action": "ended",
+                "attendance_id": active_shift.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "hours_worked": hours_worked,
+                "start_time": active_shift.start_time.strftime('%H:%M'),
+                "end_time": active_shift.end_time.strftime('%H:%M'),
+                "message": "Shift ended successfully"
+            }), 200
+        else:
+            # Start shift using API-provided time
+            if not work_location:
+                return jsonify({"error": "Work location is required to start a shift"}), 400
+
+            record = Attendance(
+                employee_id=employee.id,
+                date=shift_time.date(),
+                start_time=shift_time.time(),
+                work_location=work_location,
+                status='active'
+            )
+            db.session.add(record)
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "action": "started",
+                "attendance_id": record.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "work_location": work_location,
+                "start_time": record.start_time.strftime('%H:%M'),
+                "message": "Shift started successfully"
+            }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
 # Smart API endpoint that automatically starts or ends shift based on employee ID
 @app.route("/api/shift", methods=["POST"])
 def api_shift():
