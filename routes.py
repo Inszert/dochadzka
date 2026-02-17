@@ -36,7 +36,6 @@ from flask import request, jsonify
 from datetime import datetime, timezone, timedelta
 from app import app
 from models import db, Employee, Attendance
-
 @app.route("/api/shift_by_name_with_time", methods=["POST"])
 def api_shift_by_name_with_time():
     try:
@@ -46,18 +45,21 @@ def api_shift_by_name_with_time():
 
         employee_name = data.get("employee_name")
         work_location = data.get("work_location", "Unknown")
-        shift_time_str = data.get("time")  # Expecting ISO format: "2026-02-17T19:30:00"
+        timestamp_str = data.get("timestamp")
 
         if not employee_name:
             return jsonify({"error": "Employee name is required"}), 400
+        if not timestamp_str:
+            return jsonify({"error": "Timestamp is required"}), 400
 
-        # Parse the provided time or fallback to server time
+        # Parse timestamp
         try:
-            shift_time = datetime.fromisoformat(shift_time_str)
-        except:
-            shift_time = datetime.now(timezone(timedelta(hours=1)))
+            ts = datetime.fromisoformat(timestamp_str)
+            ts = ts.replace(tzinfo=timezone(timedelta(hours=1)))  # Optional: set timezone if needed
+        except ValueError:
+            return jsonify({"error": "Invalid timestamp format. Use ISO 8601, e.g., 2026-02-17T14:30:00"}), 400
 
-        # Split name
+        # Find employee by name
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
@@ -79,8 +81,8 @@ def api_shift_by_name_with_time():
         ).order_by(Attendance.id.desc()).first()
 
         if active_shift:
-            # End shift using API-provided time
-            active_shift.end_time = shift_time.time()
+            # End the active shift
+            active_shift.end_time = ts.time()
             active_shift.status = 'completed'
             hours_worked = active_shift.hours_worked()
             db.session.commit()
@@ -97,14 +99,14 @@ def api_shift_by_name_with_time():
                 "message": "Shift ended successfully"
             }), 200
         else:
-            # Start shift using API-provided time
+            # Start a new shift
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
 
             record = Attendance(
                 employee_id=employee.id,
-                date=shift_time.date(),
-                start_time=shift_time.time(),
+                date=ts.date(),
+                start_time=ts.time(),
                 work_location=work_location,
                 status='active'
             )
@@ -124,7 +126,6 @@ def api_shift_by_name_with_time():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 # Smart API endpoint that automatically starts or ends shift based on employee ID
