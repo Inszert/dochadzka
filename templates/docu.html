@@ -162,15 +162,23 @@ http.postJson("https://your-domain.com/api/shift_by_name", {
                                     <span class="badge bg-success badge-method">POST</span>
                                 </div>
                                 <h6 class="card-subtitle mb-2 text-muted">/api/shift_by_name_with_time</h6>
-                                <p class="card-text">Automatically starts a new shift or ends the current active shift based on employee name. The time is pulled from the server API instead of ESP32.</p>
+                                <p class="card-text">Starts or ends a shift based on employee name. The client sends the timestamp instead of using server time.</p>
                                 
                                 <h6>Request Body:</h6>
                                 <div class="code-block">
                                     <code>{
   "employee_name": "Janko Mrkvička",
-  "work_location": "Zoo"  // Required only when starting
+  "work_location": "Zoo",             // Required only when starting
+  "timestamp": "2026-02-17T14:30:00"  // ISO 8601 format
 }</code>
                                 </div>
+
+                                <h6>Name Matching Rules:</h6>
+                                <ul>
+                                    <li><strong>Full name:</strong> exact name+surname match</li>
+                                    <li><strong>Partial name:</strong> searches in name and surname fields</li>
+                                    <li><strong>Case insensitive</strong></li>
+                                </ul>
 
                                 <h6>Response (Starting Shift):</h6>
                                 <div class="code-block">
@@ -205,7 +213,8 @@ http.postJson("https://your-domain.com/api/shift_by_name", {
                                 <div class="code-block">
                                     <code>http.postJson("https://your-domain.com/api/shift_by_name_with_time", {
   "employee_name": "Janko Mrkvička",
-  "work_location": "Zoo"  // Omit to clock out
+  "work_location": "Zoo",               // Omit to clock out
+  "timestamp": "2026-02-17T14:30:00"
 });</code>
                                 </div>
                             </div>
