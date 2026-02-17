@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from app import app
 from models import db, Employee, Attendance
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 
 @app.route("/")
 def home():
@@ -57,7 +57,7 @@ def api_shift():
         
         if active_shift:
             # End the active shift
-            now = datetime.now(timezone(timedelta(hours=1)))
+            now = datetime.now()
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             
@@ -80,7 +80,7 @@ def api_shift():
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
             
-            now = datetime.now(timezone(timedelta(hours=1)))
+            now = datetime.now()
             record = Attendance(
                 employee_id=employee_id,
                 date=now.date(),
@@ -143,7 +143,7 @@ def api_shift_by_name():
         
         if active_shift:
             # End the active shift
-            now = datetime.now(timezone(timedelta(hours=1)))
+            now = datetime.now()
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             
@@ -167,7 +167,7 @@ def api_shift_by_name():
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
             
-            now = datetime.now(timezone(timedelta(hours=1)))
+            now = datetime.now()
             record = Attendance(
                 employee_id=employee.id,
                 date=now.date(),
@@ -216,7 +216,7 @@ def api_start_shift():
             return jsonify({"error": "Employee not found"}), 404
         
         # Create new attendance record with start time only
-        now = datetime.now(timezone(timedelta(hours=1)))
+        now = datetime.now()
         record = Attendance(
             employee_id=employee_id,
             date=now.date(),
@@ -272,7 +272,7 @@ def api_start_shift_by_name():
             return jsonify({"error": "Employee not found"}), 404
         
         # Create new attendance record with start time only
-        now = datetime.now(timezone(timedelta(hours=1)))
+        now = datetime.now()
         record = Attendance(
             employee_id=employee.id,
             date=now.date(),
@@ -324,7 +324,7 @@ def api_end_shift():
                 return jsonify({"error": "No active shift found for this employee"}), 404
         
         # Update with end time
-        now = datetime.now(timezone(timedelta(hours=1)))
+        now = datetime.now()
         record.end_time = now.time()
         record.status = 'completed'
         
@@ -379,7 +379,7 @@ def api_end_shift_by_name():
             return jsonify({"error": "No active shift found for this employee"}), 404
         
         # Update with end time
-        now = datetime.now(timezone(timedelta(hours=1)))
+        now = datetime.now()
         record.end_time = now.time()
         record.status = 'completed'
         
@@ -406,7 +406,7 @@ def attendance():
             work_location = request.form.get("work_location")
             
             if employee_id and work_location:
-                now = datetime.now(timezone(timedelta(hours=1)))
+                now = datetime.now()
                 record = Attendance(
                     employee_id=employee_id,
                     date=now.date(),
@@ -453,7 +453,7 @@ def attendance():
     employees = Employee.query.all()
     
     # Get today's date for the form
-    today = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
+    today = datetime.now().strftime('%Y-%m-%d')
     
     return render_template("attendance.html", records=records, employees=employees, today=today)
 
@@ -484,7 +484,7 @@ def end_shift(record_id):
     if record.end_time:
         flash("Táto smena už bola ukončená", "warning")
     else:
-        now = datetime.now(timezone(timedelta(hours=1)))
+        now = datetime.now()
         record.end_time = now.time()
         record.status = 'completed'
         db.session.commit()
