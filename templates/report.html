@@ -35,17 +35,43 @@
     border-radius: 6px;
   }
 
-  /* Print styling */
-  
+  /* --- PRINT STYLES --- */
+  @media print {
+    body {
+      -webkit-print-color-adjust: exact; /* Chrome/Safari */
+      print-color-adjust: exact;         /* Firefox */
+    }
+
+    .attendance-card {
+      box-shadow: none; /* Shadow sa pri tlači často nevytlačí pekne */
+    }
+
+    .filter-form {
+      display: none; /* Nepotrebujeme filter form na tlači */
+    }
+
+    table th, table td {
+      border: 1px solid #000 !important; /* pevné okraje na tlači */
+    }
+
+    .badge {
+      color: #fff !important;
+    }
+
+    .badge.bg-danger { background-color: #dc3545 !important; }
+    .badge.bg-warning { background-color: #ffc107 !important; color: #000 !important; }
+    .badge.bg-primary { background-color: #0d6efd !important; }
+    .badge.bg-success { background-color: #198754 !important; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container my-4" id="printable">
+<div class="container my-4" >
   <h1 class="mb-4 text-primary">Report: {{ emp.name }} {{ emp.surname }}</h1>
 
   <!-- Filter Form -->
-  <form method="POST" class="row g-3 mb-4 filter-form no-print">
+  <form method="POST" class="row g-3 mb-4 filter-form ">
     <div class="col-md-3">
       <label class="form-label">Od:</label>
       <input type="date" name="start_date" class="form-control">
