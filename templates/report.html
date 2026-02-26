@@ -67,12 +67,9 @@
           </tr>
         </thead>
         <tbody>
-          {% set saturday_hours = 0 %}
-          {% set sunday_hours = 0 %}
           {% for rec in records %}
             {% set hours = rec.hours_worked() %}
             {% set rec_date = rec.date %}
-            {# Convert string date to Python date if needed #}
             {% if rec_date.__class__.__name__ == 'str' %}
               {% set rec_date = rec_date|datetime('%Y-%m-%d') %}
             {% endif %}
@@ -91,10 +88,8 @@
                   <span class="badge badge-hours bg-danger">{{ hours }}</span>
                 {% elif rec_date.weekday() == 5 %}
                   <span class="badge badge-hours badge-saturday">{{ hours }}</span>
-                  {% set saturday_hours = saturday_hours + hours %}
                 {% elif rec_date.weekday() == 6 %}
                   <span class="badge badge-hours badge-sunday">{{ hours }}</span>
-                  {% set sunday_hours = sunday_hours + hours %}
                 {% else %}
                   <span class="badge badge-hours bg-primary">{{ hours }}</span>
                 {% endif %}

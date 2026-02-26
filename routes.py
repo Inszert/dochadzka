@@ -671,7 +671,6 @@ def delete_employee(emp_id):
 
 import requests
 from datetime import date
-
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
@@ -690,11 +689,11 @@ def report(emp_id):
 
     records = records_query.order_by(Attendance.date.desc()).all()
 
-    # VYTVOR SI ROKY, KTORÉ POTREBUJEŠ
+    # roky, ktoré potrebujeme pre sviatky
     years = set(rec.date.year for rec in records)
     holidays = set()
 
-    # VOLANIE NAGER API pre každý rok
+    # volanie Nager API pre každý rok
     for yr in years:
         try:
             url = f"https://date.nager.at/api/v3/PublicHolidays/{yr}/SK"
@@ -702,7 +701,6 @@ def report(emp_id):
             if response.status_code == 200:
                 data = response.json()
                 for h in data:
-                    # dátum ako date
                     d = datetime.strptime(h["date"], "%Y-%m-%d").date()
                     holidays.add(d)
         except Exception as e:
@@ -710,16 +708,20 @@ def report(emp_id):
 
     total_hours = 0
     normal_hours = 0
-    weekend_hours = 0
+    saturday_hours = 0
+    sunday_hours = 0
     holiday_hours = 0
 
     for rec in records:
         hours = rec.hours_worked()
         total_hours += hours
+
         if rec.date in holidays:
             holiday_hours += hours
-        elif rec.date.weekday() >= 5:
-            weekend_hours += hours
+        elif rec.date.weekday() == 5:
+            saturday_hours += hours
+        elif rec.date.weekday() == 6:
+            sunday_hours += hours
         else:
             normal_hours += hours
 
@@ -729,7 +731,8 @@ def report(emp_id):
         records=records,
         total_hours=total_hours,
         normal_hours=normal_hours,
-        weekend_hours=weekend_hours,
+        saturday_hours=saturday_hours,
+        sunday_hours=sunday_hours,
         holiday_hours=holiday_hours,
         holidays=holidays
     )
