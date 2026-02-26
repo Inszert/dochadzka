@@ -1,12 +1,14 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify
-from app import app
+from flask import Blueprint
+
+routes = Blueprint("routes", __name__)
 from models import db, Employee, Attendance
 from datetime import datetime, timezone, timedelta
 
-@app.route("/")
+@routes.route("/")
 def home():
     return render_template("index.html")
-@app.route("/documentation")
+@routes.route("/documentation")
 def documentation():
     return render_template("docu.html")
 import requests
@@ -21,7 +23,7 @@ def get_slovak_holidays(year):
         print("Holiday API error:", e)
         return set()
     
-@app.route("/employees", methods=["GET", "POST"])
+@routes.route("/employees", methods=["GET", "POST"])
 def employees():
     if request.method == "POST":
         name = request.form.get("name")
@@ -46,7 +48,7 @@ from flask import request, jsonify
 from datetime import datetime, timezone, timedelta
 from app import app
 from models import db, Employee, Attendance
-@app.route("/api/shift_by_name_with_time", methods=["POST"])
+@routes.route("/api/shift_by_name_with_time", methods=["POST"])
 def api_shift_by_name_with_time():
     try:
         data = request.get_json()
@@ -139,7 +141,7 @@ def api_shift_by_name_with_time():
 
 
 # Smart API endpoint that automatically starts or ends shift based on employee ID
-@app.route("/api/shift", methods=["POST"])
+@routes.route("/api/shift", methods=["POST"])
 def api_shift():
     try:
         data = request.get_json()
@@ -214,7 +216,7 @@ def api_shift():
         return jsonify({"error": str(e)}), 500
 
 # Smart API endpoint that automatically starts or ends shift based on employee name
-@app.route("/api/shift_by_name", methods=["POST"])
+@routes.route("/api/shift_by_name", methods=["POST"])
 def api_shift_by_name():
     try:
         data = request.get_json()
@@ -302,7 +304,7 @@ def api_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 # API endpoint for ESP32 to start shift with employee ID
-@app.route("/api/start_shift", methods=["POST"])
+@routes.route("/api/start_shift", methods=["POST"])
 def api_start_shift():
     try:
         data = request.get_json()
@@ -347,7 +349,7 @@ def api_start_shift():
         return jsonify({"error": str(e)}), 500
 
 # API endpoint for ESP32 to start shift with employee name
-@app.route("/api/start_shift_by_name", methods=["POST"])
+@routes.route("/api/start_shift_by_name", methods=["POST"])
 def api_start_shift_by_name():
     try:
         data = request.get_json()
@@ -404,7 +406,7 @@ def api_start_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 # API endpoint for ESP32 to end shift with employee ID
-@app.route("/api/end_shift", methods=["POST"])
+@routes.route("/api/end_shift", methods=["POST"])
 def api_end_shift():
     try:
         data = request.get_json()
@@ -449,7 +451,7 @@ def api_end_shift():
         return jsonify({"error": str(e)}), 500
 
 # API endpoint for ESP32 to end shift with employee name
-@app.route("/api/end_shift_by_name", methods=["POST"])
+@routes.route("/api/end_shift_by_name", methods=["POST"])
 def api_end_shift_by_name():
     try:
         data = request.get_json()
@@ -504,7 +506,7 @@ def api_end_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 # Web interface for starting shift
-@app.route("/attendance", methods=["GET", "POST"])
+@routes.route("/attendance", methods=["GET", "POST"])
 def attendance():
     if request.method == "POST":
         # Check which form was submitted
@@ -565,7 +567,7 @@ def attendance():
     
     return render_template("attendance.html", records=records, employees=employees, today=today)
 
-@app.route("/end_shift_manual", methods=["POST"])
+@routes.route("/end_shift_manual", methods=["POST"])
 def end_shift_manual():
     attendance_id = request.form.get("attendance_id")
     end_time_str = request.form.get("end_time")
@@ -585,7 +587,7 @@ def end_shift_manual():
     
     return redirect("/attendance")
 
-@app.route("/end_shift/<int:record_id>")
+@routes.route("/end_shift/<int:record_id>")
 def end_shift(record_id):
     record = Attendance.query.get_or_404(record_id)
     
@@ -600,7 +602,7 @@ def end_shift(record_id):
     
     return redirect("/attendance")
 
-@app.route("/edit_attendance/<int:record_id>", methods=["GET", "POST"])
+@routes.route("/edit_attendance/<int:record_id>", methods=["GET", "POST"])
 def edit_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)
     employees = Employee.query.all()
@@ -644,7 +646,7 @@ def edit_attendance(record_id):
                           start_time_formatted=start_time_formatted,
                           end_time_formatted=end_time_formatted)
 
-@app.route("/delete_attendance/<int:record_id>")
+@routes.route("/delete_attendance/<int:record_id>")
 def delete_attendance(record_id):
     record = Attendance.query.get_or_404(record_id)
     db.session.delete(record)
@@ -652,7 +654,7 @@ def delete_attendance(record_id):
     flash("Záznam bol odstránený", "success")
     return redirect("/attendance")
 
-@app.route("/edit_employee/<int:emp_id>", methods=["GET", "POST"])
+@routes.route("/edit_employee/<int:emp_id>", methods=["GET", "POST"])
 def edit_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     
@@ -665,7 +667,7 @@ def edit_employee(emp_id):
     
     return render_template("edit_employee.html", emp=emp)
 
-@app.route("/delete_employee/<int:emp_id>")
+@routes.route("/delete_employee/<int:emp_id>")
 def delete_employee(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     
@@ -676,7 +678,7 @@ def delete_employee(emp_id):
     db.session.commit()
     flash("Zamestnanec bol odstránený", "success")
     return redirect("/employees")
-@app.route("/report/<int:emp_id>", methods=["GET", "POST"])
+@routes.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     records_query = Attendance.query.filter_by(employee_id=emp_id)

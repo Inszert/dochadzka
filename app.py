@@ -39,8 +39,8 @@ db.init_app(app)
 from models import Employee, Attendance
 
 # Import routes after models
-from routes import *
-
+from routes import routes
+app.register_blueprint(routes)
 if __name__ == "__main__":
     with app.app_context():
         try:
