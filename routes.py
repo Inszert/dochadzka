@@ -667,23 +667,69 @@ def delete_employee(emp_id):
     flash("Zamestnanec bol odstránený", "success")
     return redirect("/employees")
 
+
+
+import requests
+from datetime import date
+
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
-    records = Attendance.query.filter_by(employee_id=emp_id)
-    total_hours = 0
-    
+    records_query = Attendance.query.filter_by(employee_id=emp_id)
+
     if request.method == "POST":
         start_date_str = request.form.get("start_date")
         end_date_str = request.form.get("end_date")
-        
         if start_date_str and end_date_str:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            records = records.filter(Attendance.date >= start_date, Attendance.date <= end_date)
-    
-    records = records.order_by(Attendance.date.desc()).all()
+            records_query = records_query.filter(
+                Attendance.date >= start_date,
+                Attendance.date <= end_date
+            )
+
+    records = records_query.order_by(Attendance.date.desc()).all()
+
+    # VYTVOR SI ROKY, KTORÉ POTREBUJEŠ
+    years = set(rec.date.year for rec in records)
+    holidays = set()
+
+    # VOLANIE NAGER API pre každý rok
+    for yr in years:
+        try:
+            url = f"https://date.nager.at/api/v3/PublicHolidays/{yr}/SK"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                for h in data:
+                    # dátum ako date
+                    d = datetime.strptime(h["date"], "%Y-%m-%d").date()
+                    holidays.add(d)
+        except Exception as e:
+            print("Holiday API error:", e)
+
+    total_hours = 0
+    normal_hours = 0
+    weekend_hours = 0
+    holiday_hours = 0
+
     for rec in records:
-        total_hours += rec.hours_worked()
-    
-    return render_template("report.html", emp=emp, records=records, total_hours=total_hours)
+        hours = rec.hours_worked()
+        total_hours += hours
+        if rec.date in holidays:
+            holiday_hours += hours
+        elif rec.date.weekday() >= 5:
+            weekend_hours += hours
+        else:
+            normal_hours += hours
+
+    return render_template(
+        "report.html",
+        emp=emp,
+        records=records,
+        total_hours=total_hours,
+        normal_hours=normal_hours,
+        weekend_hours=weekend_hours,
+        holiday_hours=holiday_hours,
+        holidays=holidays
+    )
