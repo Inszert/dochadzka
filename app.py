@@ -38,7 +38,7 @@ db.init_app(app)
 # Import models AFTER initializing db but BEFORE create_all()
 from models import Employee, Attendance
 
-# Import routes after models
+# Import routes AFTER models
 from routes import routes
 app.register_blueprint(routes)
 if __name__ == "__main__":
