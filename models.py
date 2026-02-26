@@ -63,10 +63,6 @@ def get_slovak_holidays(year):
 # ------------------------
 
 
-from flask import Flask, render_template, request
-from datetime import datetime, date, timedelta
-import requests
-
 
 @app.route("/", methods=["GET", "POST"])
 def report():
