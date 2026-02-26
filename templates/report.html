@@ -23,22 +23,9 @@
 
   /* Badges for hours */
   .badge-hours {
-    background-color: #0d6efd;
-    color: white;
     font-size: 0.9em;
+    padding: 0.5em 0.75em;
   }
-
-.weekend-row td {
-  background-color: #fff3cd !important;
-}
-
-.holiday-row td {
-  background-color: #f8d7da !important;
-}
-
-.normal-row td {
-  background-color: #e2f0ff !important;
-}
 
   /* Form styling */
   .filter-form .form-control {
@@ -104,16 +91,7 @@
         </thead>
         <tbody>
           {% for rec in records %}
-            {% set row_class = "" %}
-            {% if rec.date in holidays %}
-              {% set row_class = "holiday-row" %}
-            {% elif rec.date.weekday() >= 5 %}
-              {% set row_class = "weekend-row" %}
-            {% else %}
-              {% set row_class = "normal-row" %}
-            {% endif %}
-
-            <tr class="{{ row_class }}">
+            <tr>
               <td>{{ rec.date }}</td>
               <td>{{ rec.start_time.strftime('%H:%M') }}</td>
               <td>
@@ -123,7 +101,16 @@
                   <span class="text-muted">Prebieha...</span>
                 {% endif %}
               </td>
-              <td><span class="badge badge-hours">{{ rec.hours_worked() }}</span></td>
+              <td>
+                {% set hours = rec.hours_worked() %}
+                {% if rec.date in holidays %}
+                  <span class="badge badge-hours bg-danger">{{ hours }}</span>
+                {% elif rec.date.weekday() >= 5 %}
+                  <span class="badge badge-hours bg-warning text-dark">{{ hours }}</span>
+                {% else %}
+                  <span class="badge badge-hours bg-primary">{{ hours }}</span>
+                {% endif %}
+              </td>
               <td>{{ rec.work_location }}</td>
             </tr>
           {% endfor %}
