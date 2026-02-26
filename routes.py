@@ -9,8 +9,18 @@ def home():
 @app.route("/documentation")
 def documentation():
     return render_template("docu.html")
-
-
+import requests
+def get_slovak_holidays(year):
+    try:
+        url = f"https://date.nager.at/api/v3/PublicHolidays/{year}/SK"
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        return {datetime.strptime(h["date"], "%Y-%m-%d").date() for h in data}
+    except Exception as e:
+        print("Holiday API error:", e)
+        return set()
+    
 @app.route("/employees", methods=["GET", "POST"])
 def employees():
     if request.method == "POST":
@@ -666,24 +676,55 @@ def delete_employee(emp_id):
     db.session.commit()
     flash("Zamestnanec bol odstránený", "success")
     return redirect("/employees")
-
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
-    records = Attendance.query.filter_by(employee_id=emp_id)
-    total_hours = 0
-    
+    records_query = Attendance.query.filter_by(employee_id=emp_id)
+
     if request.method == "POST":
         start_date_str = request.form.get("start_date")
         end_date_str = request.form.get("end_date")
-        
+
         if start_date_str and end_date_str:
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            records = records.filter(Attendance.date >= start_date, Attendance.date <= end_date)
-    
-    records = records.order_by(Attendance.date.desc()).all()
+            records_query = records_query.filter(
+                Attendance.date >= start_date,
+                Attendance.date <= end_date
+            )
+
+    records = records_query.order_by(Attendance.date.desc()).all()
+
+    # --- Získanie sviatkov podľa roku ---
+    years = {rec.date.year for rec in records}
+    holidays = set()
+    for y in years:
+        holidays.update(get_slovak_holidays(y))
+
+    # --- Počítanie hodín podľa typu ---
+    total_hours = 0
+    normal_hours = 0
+    weekend_hours = 0
+    holiday_hours = 0
+
     for rec in records:
-        total_hours += rec.hours_worked()
-    
-    return render_template("report.html", emp=emp, records=records, total_hours=total_hours)
+        hours = rec.hours_worked()
+        total_hours += hours
+
+        if rec.date in holidays:
+            holiday_hours += hours
+        elif rec.date.weekday() >= 5:  # sobota/nedeľa
+            weekend_hours += hours
+        else:
+            normal_hours += hours
+
+    return render_template(
+        "report.html",
+        emp=emp,
+        records=records,
+        total_hours=total_hours,
+        normal_hours=normal_hours,
+        weekend_hours=weekend_hours,
+        holiday_hours=holiday_hours,
+        holidays=holidays
+    )
