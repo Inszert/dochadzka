@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from app import app
 from models import db, Employee, Attendance
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 @app.route("/")
 def home():
@@ -30,6 +30,104 @@ def employees():
     all_emps = Employee.query.all()
     return render_template("employees.html", all_emps=all_emps)
 
+
+
+from flask import request, jsonify
+from datetime import datetime, timezone, timedelta
+from app import app
+from models import db, Employee, Attendance
+@app.route("/api/shift_by_name_with_time", methods=["POST"])
+def api_shift_by_name_with_time():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+
+        employee_name = data.get("employee_name")
+        work_location = data.get("work_location", "Unknown")
+        timestamp_str = data.get("timestamp")
+
+        if not employee_name:
+            return jsonify({"error": "Employee name is required"}), 400
+        if not timestamp_str:
+            return jsonify({"error": "Timestamp is required"}), 400
+
+        # Parse timestamp
+        try:
+            ts = datetime.fromisoformat(timestamp_str)
+            ts = ts.replace(tzinfo=timezone(timedelta(hours=1)))  # Optional: set timezone if needed
+        except ValueError:
+            return jsonify({"error": "Invalid timestamp format. Use ISO 8601, e.g., 2026-02-17T14:30:00"}), 400
+
+        # Find employee by name
+        name_parts = employee_name.strip().split(' ', 1)
+        if len(name_parts) == 2:
+            name, surname = name_parts
+            employee = Employee.query.filter_by(name=name, surname=surname).first()
+        else:
+            search_name = name_parts[0]
+            employee = Employee.query.filter(
+                (Employee.name.ilike(f"%{search_name}%")) |
+                (Employee.surname.ilike(f"%{search_name}%"))
+            ).first()
+
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+
+        # Check for active shift
+        active_shift = Attendance.query.filter_by(
+            employee_id=employee.id,
+            status='active'
+        ).order_by(Attendance.id.desc()).first()
+
+        if active_shift:
+            # End the active shift
+            active_shift.end_time = ts.time()
+            active_shift.status = 'completed'
+            hours_worked = active_shift.hours_worked()
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "action": "ended",
+                "attendance_id": active_shift.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "hours_worked": hours_worked,
+                "start_time": active_shift.start_time.strftime('%H:%M'),
+                "end_time": active_shift.end_time.strftime('%H:%M'),
+                "message": "Shift ended successfully"
+            }), 200
+        else:
+            # Start a new shift
+            if not work_location:
+                return jsonify({"error": "Work location is required to start a shift"}), 400
+
+            record = Attendance(
+                employee_id=employee.id,
+                date=ts.date(),
+                start_time=ts.time(),
+                work_location=work_location,
+                status='active'
+            )
+            db.session.add(record)
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "action": "started",
+                "attendance_id": record.id,
+                "employee_id": employee.id,
+                "employee_name": f"{employee.name} {employee.surname}",
+                "work_location": work_location,
+                "start_time": record.start_time.strftime('%H:%M'),
+                "message": "Shift started successfully"
+            }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # Smart API endpoint that automatically starts or ends shift based on employee ID
 @app.route("/api/shift", methods=["POST"])
 def api_shift():
@@ -57,7 +155,7 @@ def api_shift():
         
         if active_shift:
             # End the active shift
-            now = datetime.now()
+            now = datetime.now(timezone(timedelta(hours=1)))
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             
@@ -80,7 +178,7 @@ def api_shift():
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
             
-            now = datetime.now()
+            now = datetime.now(timezone(timedelta(hours=1)))
             record = Attendance(
                 employee_id=employee_id,
                 date=now.date(),
@@ -143,7 +241,7 @@ def api_shift_by_name():
         
         if active_shift:
             # End the active shift
-            now = datetime.now()
+            now = datetime.now(timezone(timedelta(hours=1)))
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             
@@ -167,7 +265,7 @@ def api_shift_by_name():
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
             
-            now = datetime.now()
+            now = datetime.now(timezone(timedelta(hours=1)))
             record = Attendance(
                 employee_id=employee.id,
                 date=now.date(),
@@ -216,7 +314,7 @@ def api_start_shift():
             return jsonify({"error": "Employee not found"}), 404
         
         # Create new attendance record with start time only
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1)))
         record = Attendance(
             employee_id=employee_id,
             date=now.date(),
@@ -272,7 +370,7 @@ def api_start_shift_by_name():
             return jsonify({"error": "Employee not found"}), 404
         
         # Create new attendance record with start time only
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1)))
         record = Attendance(
             employee_id=employee.id,
             date=now.date(),
@@ -324,7 +422,7 @@ def api_end_shift():
                 return jsonify({"error": "No active shift found for this employee"}), 404
         
         # Update with end time
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1)))
         record.end_time = now.time()
         record.status = 'completed'
         
@@ -379,7 +477,7 @@ def api_end_shift_by_name():
             return jsonify({"error": "No active shift found for this employee"}), 404
         
         # Update with end time
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1)))
         record.end_time = now.time()
         record.status = 'completed'
         
@@ -406,7 +504,7 @@ def attendance():
             work_location = request.form.get("work_location")
             
             if employee_id and work_location:
-                now = datetime.now()
+                now = datetime.now(timezone(timedelta(hours=1)))
                 record = Attendance(
                     employee_id=employee_id,
                     date=now.date(),
@@ -453,7 +551,7 @@ def attendance():
     employees = Employee.query.all()
     
     # Get today's date for the form
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = datetime.now(timezone(timedelta(hours=1))).strftime('%Y-%m-%d')
     
     return render_template("attendance.html", records=records, employees=employees, today=today)
 
@@ -484,7 +582,7 @@ def end_shift(record_id):
     if record.end_time:
         flash("Táto smena už bola ukončená", "warning")
     else:
-        now = datetime.now()
+        now = datetime.now(timezone(timedelta(hours=1)))
         record.end_time = now.time()
         record.status = 'completed'
         db.session.commit()
