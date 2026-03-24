@@ -16,7 +16,7 @@
 // API endpoints
 #define API_URL "https://fuzzy-trina-prenako-sro-b1bc9170.koyeb.app/api/shift_by_name"
 #define API_RETRY_URL "https://fuzzy-trina-prenako-sro-b1bc9170.koyeb.app/api/shift_by_name_with_time"
-#define WORK_LOCATION "Zoo"
+#define WORK_LOCATION "Bufet"
 
 // Pin definitions
 #define LCD_MOSI 23
@@ -43,16 +43,30 @@ int spiffsEntryCount = 0;
 unsigned long lastRetryAttempt = 0;
 const unsigned long RETRY_INTERVAL = 10000; // Try to retry every 10 seconds when conditions are met
 bool isRetrying = false;
-bool immediateRetryNeeded = false; // Flag for immediate retry after WiFi connection
+bool immediateRetryNeeded = false;
 
-// Time tracking for backtracking
-unsigned long bootTime = 0;
-time_t bootEpoch = 0;
+// Last entry tracking
+String lastEntryName = "---";
+String lastEntryNameLine1 = "---";
+String lastEntryNameLine2 = "";
+String lastEntryTime = "--:--:--";
+String lastEntryISOTime = "";
+
+// Time tracking
 bool timeSynced = false;
 unsigned long lastTimeSyncAttempt = 0;
 const unsigned long TIME_SYNC_INTERVAL = 3600000;
-time_t lastKnownTime = 0; // Store last known time for drift calculation
-unsigned long lastTimeCheck = 0; // When we last checked the time
+
+// Offline time tracking
+unsigned long bootMinutes = 0;  // Minutes since boot (for display)
+unsigned long totalOfflineMinutes = 0;  // Total offline minutes across resets
+unsigned long lastMinuteTick = 0;
+unsigned long lastSavedMinute = 0;
+bool minuteIncremented = false;
+
+// Base reference for offline time
+time_t offlineBaseTime = 0;  // Will be set when we first get time sync
+bool offlineBaseSet = false;
 
 // Display update
 unsigned long lastDisplayUpdate = 0;
@@ -61,7 +75,7 @@ const unsigned long DISPLAY_UPDATE_INTERVAL = 1000; // Update time every second
 // Time
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 3600; // GMT+1 (CET)
-const int daylightOffset_sec = 3600; // +1 hour for daylight saving (CEST)
+const int daylightOffset_sec = 0; // +1 hour for daylight saving (CEST)
 
 Adafruit_ST7789 lcd = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_RST);
 MFRC522 rfid(SS_PIN, RST_PIN);
@@ -75,13 +89,20 @@ void setup() {
     Serial.println("SPIFFS Mount Failed");
   }
   
+  // Load total offline minutes
+  loadOfflineMinutes();
+  
+  // Record boot time for minute calculation
+  bootMinutes = 0;
+  lastMinuteTick = millis();
+  
   // Clean up invalid entries on startup
   cleanupSpiffs();
   updateSpiffsEntryCount();
 
   SPI.begin(LCD_SCLK, MISO_PIN, LCD_MOSI, LCD_CS);
   lcd.init(135, 240);
-  lcd.setRotation(2); // Rotate display 180 degrees (upside down)
+  lcd.setRotation(2);
   lcd.fillScreen(ST77XX_BLACK);
   lcd.setTextWrap(true);
   lcd.setTextSize(2);
@@ -89,8 +110,6 @@ void setup() {
   rfid.PCD_Init();
   for (byte i = 0; i < 6; i++) key.keyByte[i] = 0xFF;
 
-  bootTime = millis();
-  
   connectToWiFi();
   initTime();
 
@@ -98,6 +117,22 @@ void setup() {
 }
 
 void loop() {
+  // Update minute counter every 60 seconds
+  if (millis() - lastMinuteTick >= 60000) {
+    bootMinutes++;
+    totalOfflineMinutes++;
+    lastMinuteTick = millis();
+    minuteIncremented = true;
+    
+    // Save total offline minutes every 5 minutes or when changed
+    if (bootMinutes % 5 == 0 || minuteIncremented) {
+      saveOfflineMinutes();
+      minuteIncremented = false;
+    }
+    
+    Serial.println("Boot minutes: " + String(bootMinutes) + ", Total offline: " + String(totalOfflineMinutes));
+  }
+  
   // Update WiFi status
   checkWifiStatus();
   
@@ -106,7 +141,7 @@ void loop() {
     connectToWiFi();
   }
   
-  // Periodically try to sync time (only if WiFi is connected)
+  // Periodically try to sync time
   if (wifiConnected && !timeSynced && millis() - lastTimeSyncAttempt >= TIME_SYNC_INTERVAL) {
     syncTime();
   }
@@ -117,9 +152,8 @@ void loop() {
     lastDisplayUpdate = millis();
   }
 
-  // Retry failed SPIFFS sends - with priority after WiFi connect
+  // Retry failed SPIFFS sends
   if (wifiConnected && timeSynced && spiffsEntryCount > 0 && !isRetrying) {
-    // Check if we need immediate retry (right after WiFi connect) or if enough time has passed
     if (immediateRetryNeeded || millis() - lastRetryAttempt >= RETRY_INTERVAL) {
       retryFailedRequests();
       immediateRetryNeeded = false;
@@ -138,7 +172,72 @@ void loop() {
     handleCardScan();
   }
 
-  delay(50); // Small delay to prevent CPU hogging
+  delay(50);
+}
+
+// ---------------------------- Offline Minutes Persistence ----------------------------
+
+void saveOfflineMinutes() {
+  File file = SPIFFS.open("/minutes.txt", FILE_WRITE);
+  if (file) {
+    file.println(String(totalOfflineMinutes));
+    file.close();
+    Serial.println("Saved total offline minutes: " + String(totalOfflineMinutes));
+  }
+}
+
+void loadOfflineMinutes() {
+  if (!SPIFFS.exists("/minutes.txt")) {
+    totalOfflineMinutes = 0;
+    return;
+  }
+  
+  File file = SPIFFS.open("/minutes.txt", FILE_READ);
+  if (file) {
+    String minutesStr = file.readStringUntil('\n');
+    minutesStr.trim();
+    totalOfflineMinutes = minutesStr.toInt();
+    file.close();
+    Serial.println("Loaded total offline minutes: " + String(totalOfflineMinutes));
+  }
+}
+
+// ---------------------------- Time Conversion ----------------------------
+
+void setOfflineBaseTime() {
+  if (timeSynced && !offlineBaseSet) {
+    // When we first get time sync, record the base time
+    time_t now = time(nullptr);
+    // Calculate what time it was when offline minutes started (0 minutes)
+    offlineBaseTime = now - (totalOfflineMinutes * 60);
+    offlineBaseSet = true;
+    Serial.println("Set offline base time to: " + String(offlineBaseTime));
+    
+    // Format for display
+    struct tm timeinfo;
+    localtime_r(&offlineBaseTime, &timeinfo);
+    char buf[30];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    Serial.println("This means offline start was: " + String(buf));
+  }
+}
+
+String offlineMinutesToISO(unsigned long offlineMinutes) {
+  if (!timeSynced || !offlineBaseSet) {
+    return "";
+  }
+  
+  // Calculate actual time: base time + (offlineMinutes * 60 seconds)
+  time_t scanTime = offlineBaseTime + (offlineMinutes * 60);
+  
+  struct tm timeinfo;
+  localtime_r(&scanTime, &timeinfo);
+  
+  char buf[25];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  return String(buf);
 }
 
 // ---------------------------- Display Functions ----------------------------
@@ -147,43 +246,75 @@ void updateMainDisplay() {
   lcd.fillScreen(ST77XX_BLACK);
   lcd.setTextSize(2);
   
-  // Time at the top
+  // Line 0: Time at the top
   updateTimeOnDisplay();
   
-  // "Scan card" text
-  lcd.setCursor(10, 40);
+  // Line 1: "Scan card" text
+  lcd.setCursor(10, 30);
   lcd.setTextColor(ST77XX_WHITE);
   lcd.println("Scan card");
   
-  // WiFi status line
+  // Line 2: WiFi status
   updateWifiStatusOnDisplay();
   
-  // SPIFFS entry count
+  // Line 3: "Saved:" text
+  lcd.setCursor(10, 90);
+  lcd.setTextColor(ST77XX_WHITE);
+  lcd.print("Saved:");
+  
+  // Line 4: SPIFFS entry count
   updateSpiffsCountOnDisplay();
+  
+  // Line 5: "Last:" text
+  lcd.setCursor(10, 140);
+  lcd.setTextColor(ST77XX_WHITE);
+  lcd.print("Last:");
+  
+  // Line 6: Last entry name - first line
+  lcd.setCursor(10, 160);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryNameLine1);
+  
+  // Line 7: Last entry name - second line
+  lcd.setCursor(10, 180);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryNameLine2);
+  
+  // Line 8: Last entry time
+  lcd.setCursor(10, 210);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryTime);
 }
 
 void updateTimeOnDisplay() {
-  // Clear previous time area (first line)
   lcd.fillRect(0, 0, 240, 20, ST77XX_BLACK);
-  
   lcd.setCursor(10, 0);
-  lcd.setTextColor(timeSynced ? ST77XX_GREEN : ST77XX_YELLOW);
   
   if (timeSynced) {
-    time_t now = getCurrentTime();
+    lcd.setTextColor(ST77XX_GREEN);
+    time_t now = time(nullptr);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
-    
     char buf[30];
     strftime(buf, sizeof(buf), "%H:%M:%S", &timeinfo);
     lcd.print(buf);
   } else {
-    lcd.print("--:--:--");
+    lcd.setTextColor(ST77XX_YELLOW);
+    // Show total minutes since boot in HH:MM format
+    unsigned long hours = bootMinutes / 60;
+    unsigned long minutes = bootMinutes % 60;
+    
+    lcd.print("OFF ");
+    if (hours < 10) lcd.print("0");
+    lcd.print(hours);
+    lcd.print(":");
+    if (minutes < 10) lcd.print("0");
+    lcd.print(minutes);
   }
 }
 
 void updateWifiStatusOnDisplay() {
-  lcd.setCursor(10, 70);
+  lcd.setCursor(10, 60);
   
   if (wifiConnected) {
     if (timeSynced) {
@@ -200,10 +331,59 @@ void updateWifiStatusOnDisplay() {
 }
 
 void updateSpiffsCountOnDisplay() {
-  lcd.setCursor(10, 100);
+  lcd.fillRect(10, 110, 220, 20, ST77XX_BLACK);
+  lcd.setCursor(10, 110);
   lcd.setTextColor(ST77XX_WHITE);
-  lcd.print("Saved: ");
   lcd.print(spiffsEntryCount);
+}
+
+void updateLastEntryOnDisplay() {
+  lcd.fillRect(10, 160, 220, 50, ST77XX_BLACK);
+  
+  lcd.setCursor(10, 160);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryNameLine1);
+  
+  lcd.setCursor(10, 180);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryNameLine2);
+  
+  lcd.setCursor(10, 210);
+  lcd.setTextColor(ST77XX_CYAN);
+  lcd.print(lastEntryTime);
+}
+
+void splitNameIntoLines(String fullName) {
+  lastEntryNameLine1 = "";
+  lastEntryNameLine2 = "";
+  
+  if (fullName.length() == 0 || fullName == "---") {
+    lastEntryNameLine1 = "---";
+    return;
+  }
+  
+  int spaceIndex = fullName.indexOf(' ');
+  if (spaceIndex > 0 && spaceIndex < 12) {
+    lastEntryNameLine1 = fullName.substring(0, spaceIndex);
+    lastEntryNameLine2 = fullName.substring(spaceIndex + 1);
+    
+    if (lastEntryNameLine1.length() > 12) {
+      lastEntryNameLine1 = lastEntryNameLine1.substring(0, 10) + "..";
+    }
+    if (lastEntryNameLine2.length() > 12) {
+      lastEntryNameLine2 = lastEntryNameLine2.substring(0, 10) + "..";
+    }
+  } else {
+    if (fullName.length() <= 12) {
+      lastEntryNameLine1 = fullName;
+    } else if (fullName.length() <= 24) {
+      lastEntryNameLine1 = fullName.substring(0, 12);
+      lastEntryNameLine2 = fullName.substring(12);
+    } else {
+      lastEntryNameLine1 = fullName.substring(0, 10) + "..";
+      lastEntryNameLine2 = fullName.substring(12, 22) + "..";
+    }
+  }
 }
 
 void updateSpiffsEntryCount() {
@@ -257,30 +437,30 @@ void cleanupSpiffs() {
     
     int first = line.indexOf('|');
     int second = line.indexOf('|', first + 1);
+    int third = line.indexOf('|', second + 1);
+    int fourth = line.indexOf('|', third + 1);
     
-    if (first == -1 || second == -1) {
+    if (first == -1 || second == -1 || third == -1 || fourth == -1) {
       removedCount++;
-      continue; // Skip invalid format
+      continue;
     }
     
     String name = line.substring(0, first);
     String location = line.substring(first + 1, second);
-    String millisStr = line.substring(second + 1);
+    String type = line.substring(second + 1, third);  // "OFFLINE" or "ONLINE"
+    String minutes = line.substring(third + 1, fourth); // minutes for OFFLINE, or timestamp for ONLINE
+    String displayTime = line.substring(fourth + 1);
     
-    // Validate fields
-    if (name.length() == 0 || name == " " || 
-        location.length() == 0 || 
-        millisStr.length() == 0 || millisStr.toInt() == 0) {
+    if (name.length() == 0 || name == " " || location.length() == 0) {
       removedCount++;
-      continue; // Skip invalid data
+      continue;
     }
     
     validLines.push_back(line);
   }
   file.close();
   
-  // Rewrite file with only valid lines
-  if (removedCount > 0 || validLines.size() != spiffsEntryCount) {
+  if (removedCount > 0) {
     File f = SPIFFS.open("/failed.txt", FILE_WRITE);
     if (f) {
       for (auto &l : validLines) {
@@ -296,7 +476,6 @@ void cleanupSpiffs() {
 // ---------------------------- Card Functions ----------------------------
 
 void handleCardScan() {
-  // Build UID string
   String uidStr = "";
   for (byte i = 0; i < rfid.uid.size; i++) {
     if (rfid.uid.uidByte[i] < 0x10) uidStr += "0";
@@ -304,8 +483,7 @@ void handleCardScan() {
   }
   uidStr.toUpperCase();
 
-  Serial.println("Card UID:");
-  Serial.println(uidStr);
+  Serial.println("Card UID: " + uidStr);
 
   byte safeBlocks[] = {4, 8, 12};
 
@@ -384,7 +562,6 @@ void readFromCard(byte safeBlocks[], String uidStr) {
 
   employeeName.trim();
   
-  // Validate employee name
   if (employeeName.length() == 0 || employeeName == " " || readSuccess == false) {
     Serial.println("Failed to read valid employee name from card!");
     showResultAndReturn("Read Failed", ST77XX_RED, 3000);
@@ -398,33 +575,60 @@ void readFromCard(byte safeBlocks[], String uidStr) {
 // ---------------------------- HTTP + SPIFFS ----------------------------
 
 void sendShiftRequest(String employeeName) {
-  // Double-check that employee name is valid
   if (employeeName.length() == 0 || employeeName == " ") {
     Serial.println("Error: Attempted to send request with empty employee name");
     showResultAndReturn("Invalid Name", ST77XX_RED, 3000);
     return;
   }
   
-  unsigned long scanTime = millis();
-  
-  if (!wifiConnected || !timeSynced) {
-    Serial.println("Cannot send immediately - saving request for later");
-    saveFailedRequest(employeeName, WORK_LOCATION, scanTime);
+  if (!wifiConnected) {
+    // No WiFi - save with offline minutes
+    String offlineMinutes_str = String(totalOfflineMinutes);
+    String displayTime = "OFF:" + String(bootMinutes) + "m";
+    
+    Serial.println("No WiFi - saving request with offline minutes: " + offlineMinutes_str);
+    // Format: name|location|OFFLINE|minutes|displayTime
+    saveFailedRequest(employeeName, WORK_LOCATION, "OFFLINE", offlineMinutes_str, displayTime);
+    
+    lastEntryName = employeeName;
+    splitNameIntoLines(employeeName);
+    lastEntryTime = displayTime;
+    updateLastEntryOnDisplay();
+    
     showResultAndReturn("Saved to SPIFFS", ST77XX_ORANGE, 3000);
     return;
   }
 
-  // We have WiFi and time sync, try to send immediately
-  String timestamp = millisToISO(scanTime);
-  
-  // Validate timestamp
-  if (timestamp.length() == 0) {
-    Serial.println("Invalid timestamp, saving for later");
-    saveFailedRequest(employeeName, WORK_LOCATION, scanTime);
-    showResultAndReturn("Time Error", ST77XX_ORANGE, 3000);
+  // We have WiFi, try to send immediately
+  if (!timeSynced) {
+    // WiFi but no time sync - save with offline minutes
+    String offlineMinutes_str = String(totalOfflineMinutes);
+    String displayTime = "OFF:" + String(bootMinutes) + "m";
+    
+    Serial.println("WiFi but no time - saving request with offline minutes: " + offlineMinutes_str);
+    saveFailedRequest(employeeName, WORK_LOCATION, "OFFLINE", offlineMinutes_str, displayTime);
+    
+    lastEntryName = employeeName;
+    splitNameIntoLines(employeeName);
+    lastEntryTime = displayTime;
+    updateLastEntryOnDisplay();
+    
+    showResultAndReturn("No Time Sync", ST77XX_ORANGE, 3000);
     return;
   }
+
+  // We have both WiFi and time sync
+  time_t now = time(nullptr);
+  struct tm timeinfo;
+  localtime_r(&now, &timeinfo);
   
+  char buf[25];
+  snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  String timestamp = String(buf);
+  String isoTime = timestamp.substring(11, 19);
+
   HTTPClient http;
   http.begin(API_URL);
   http.addHeader("Content-Type", "application/json");
@@ -437,26 +641,60 @@ void sendShiftRequest(String employeeName) {
 
   Serial.println("Sent: " + payload);
   Serial.println("Response code: " + String(httpResponseCode));
-  if (response.length() > 0) {
-    Serial.println("Response: " + response);
+
+  // Extract time from response if available
+  String responseTime = extractTimeFromResponse(response);
+  
+  lastEntryName = employeeName;
+  splitNameIntoLines(employeeName);
+  
+  if (responseTime.length() > 0) {
+    lastEntryTime = responseTime;
+  } else {
+    lastEntryTime = isoTime;
   }
+  updateLastEntryOnDisplay();
 
   if (httpResponseCode > 0 && response.indexOf("\"success\":true") != -1) {
     showResultAndReturn("Success!", ST77XX_GREEN, 3000);
   } else {
-    // If immediate send fails, save for retry
-    saveFailedRequest(employeeName, WORK_LOCATION, scanTime);
+    // Save for retry with the actual timestamp
+    saveFailedRequest(employeeName, WORK_LOCATION, "ONLINE", timestamp, isoTime);
     showResultAndReturn("Saved for retry", ST77XX_ORANGE, 3000);
   }
 
   http.end();
 }
 
+String extractTimeFromResponse(String response) {
+  int startIdx = response.indexOf("\"start_time\":\"");
+  if (startIdx > 0) {
+    startIdx += 13;
+    int endIdx = response.indexOf("\"", startIdx);
+    if (endIdx > startIdx) {
+      return response.substring(startIdx, endIdx);
+    }
+  }
+  
+  startIdx = response.indexOf("\"end_time\":\"");
+  if (startIdx > 0) {
+    startIdx += 11;
+    int endIdx = response.indexOf("\"", startIdx);
+    if (endIdx > startIdx) {
+      return response.substring(startIdx, endIdx);
+    }
+  }
+  
+  return "";
+}
+
 void retryFailedRequests() {
-  // Double-check conditions before starting retry
   if (!wifiConnected || !timeSynced || spiffsEntryCount == 0 || isRetrying) {
     return;
   }
+  
+  // Set offline base time if not set yet
+  setOfflineBaseTime();
   
   isRetrying = true;
   lastRetryAttempt = millis();
@@ -480,7 +718,6 @@ void retryFailedRequests() {
   int sentCount = 0;
   int invalidCount = 0;
 
-  // First count total to send
   while (file.available()) {
     String line = file.readStringUntil('\n');
     line.trim();
@@ -493,7 +730,6 @@ void retryFailedRequests() {
     return;
   }
 
-  // Now process each line
   file = SPIFFS.open("/failed.txt", FILE_READ);
   
   while (file.available()) {
@@ -503,29 +739,43 @@ void retryFailedRequests() {
 
     int first = line.indexOf('|');
     int second = line.indexOf('|', first + 1);
-    if(first == -1 || second == -1) {
+    int third = line.indexOf('|', second + 1);
+    int fourth = line.indexOf('|', third + 1);
+    
+    if(first == -1 || second == -1 || third == -1 || fourth == -1) {
       invalidCount++;
-      continue; // Skip invalid lines
+      continue;
     }
 
     String name = line.substring(0, first);
     String location = line.substring(first + 1, second);
-    unsigned long scanMillis = line.substring(second + 1).toInt();
+    String type = line.substring(second + 1, third);
+    String value = line.substring(third + 1, fourth);  // minutes for OFFLINE, timestamp for ONLINE
+    String displayTime = line.substring(fourth + 1);
 
-    // Validate employee name
     if (name.length() == 0 || name == " ") {
-      Serial.println("Skipping invalid entry with empty name");
       invalidCount++;
-      continue; // Skip entries with empty names
+      continue;
     }
 
-    String timestamp = millisToISO(scanMillis);
+    String finalTimestamp;
     
-    // Check if timestamp is valid
-    if (timestamp.length() == 0) {
-      Serial.println("Invalid timestamp, keeping for later");
-      remainingLines.push_back(line);
-      continue;
+    if (type == "OFFLINE") {
+      // Convert offline minutes to actual timestamp
+      unsigned long offlineMinutes = value.toInt();
+      finalTimestamp = offlineMinutesToISO(offlineMinutes);
+      
+      if (finalTimestamp.length() == 0) {
+        // Can't convert yet, keep for later
+        remainingLines.push_back(line);
+        continue;
+      }
+      
+      // Update display time
+      displayTime = finalTimestamp.substring(11, 19);
+    } else {
+      // ONLINE entry - use the stored timestamp
+      finalTimestamp = value;
     }
 
     HTTPClient http;
@@ -533,9 +783,8 @@ void retryFailedRequests() {
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(10000);
 
-    String payload = "{ \"employee_name\": \"" + name + "\", \"work_location\": \"" + location + "\", \"timestamp\": \"" + timestamp + "\" }";
+    String payload = "{ \"employee_name\": \"" + name + "\", \"work_location\": \"" + location + "\", \"timestamp\": \"" + finalTimestamp + "\" }";
 
-    // Blink blue for each retry attempt
     blinkScreen(ST77XX_BLUE, 200);
     
     int code = http.POST(payload);
@@ -548,7 +797,13 @@ void retryFailedRequests() {
       sentCount++;
       anySent = true;
       Serial.println("Successfully sent: " + name);
+      
+      lastEntryName = name;
+      splitNameIntoLines(name);
+      lastEntryTime = displayTime;
+      updateLastEntryOnDisplay();
     } else {
+      // Keep the original line
       remainingLines.push_back(line);
       Serial.println("Failed to send, keeping for later");
     }
@@ -558,7 +813,6 @@ void retryFailedRequests() {
   }
   file.close();
 
-  // Rewrite file with remaining unsent lines
   File f = SPIFFS.open("/failed.txt", FILE_WRITE);
   if (f) {
     for (auto &l : remainingLines) {
@@ -591,13 +845,10 @@ void retryFailedRequests() {
   }
   
   isRetrying = false;
-  Serial.println("Retry attempt completed. Sent: " + String(sentCount) + 
-                 ", Kept: " + String(remainingLines.size()) + 
-                 ", Invalid: " + String(invalidCount));
+  Serial.println("Retry attempt completed. Sent: " + String(sentCount));
 }
 
-void saveFailedRequest(String name, String location, unsigned long scanMillis) {
-  // Validate before saving
+void saveFailedRequest(String name, String location, String type, String value, String displayTime) {
   if (name.length() == 0 || name == " ") {
     Serial.println("Error: Attempted to save empty employee name to SPIFFS");
     return;
@@ -605,25 +856,17 @@ void saveFailedRequest(String name, String location, unsigned long scanMillis) {
   
   File file = SPIFFS.open("/failed.txt", FILE_APPEND);
   if(file) {
-    file.println(name + "|" + location + "|" + String(scanMillis));
+    // Format: name|location|type|value|displayTime
+    // type: "OFFLINE" or "ONLINE"
+    // value: minutes for OFFLINE, timestamp string for ONLINE
+    file.println(name + "|" + location + "|" + type + "|" + value + "|" + displayTime);
     file.close();
-    Serial.println("Saved failed request: " + name + " at millis: " + String(scanMillis));
+    Serial.println("Saved failed request: " + name + " type: " + type + " value: " + value);
     spiffsContentChanged = true;
-  } else {
-    Serial.println("Error: Failed to open SPIFFS file for writing");
   }
 }
 
-// ---------------------------- Time Functions with Proper Backtracking ----------------------------
-
-time_t getCurrentTime() {
-  if (timeSynced && bootEpoch > 0) {
-    // Calculate current time based on boot epoch and elapsed time
-    unsigned long elapsedSeconds = (millis() - bootTime) / 1000;
-    return bootEpoch + elapsedSeconds;
-  }
-  return 0;
-}
+// ---------------------------- Time Functions ----------------------------
 
 void initTime() {
   if (WiFi.status() == WL_CONNECTED) {
@@ -636,22 +879,14 @@ void initTime() {
       struct tm timeinfo;
       localtime_r(&now, &timeinfo);
       
-      if (timeinfo.tm_year > 120) { // Year > 2020
+      if (timeinfo.tm_year > 120) {
         timeSynced = true;
-        // CRITICAL FIX: Calculate boot epoch correctly
-        // bootEpoch = current time - time since boot
-        unsigned long elapsedSeconds = (millis() - bootTime) / 1000;
-        bootEpoch = now - elapsedSeconds;
-        
-        lastKnownTime = now;
-        lastTimeCheck = millis();
+        setOfflineBaseTime();
         
         char buf[30];
         strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
         Serial.println("Time synchronized successfully");
         Serial.println("Current time: " + String(buf));
-        Serial.println("Boot epoch: " + String(bootEpoch));
-        Serial.println("Elapsed seconds: " + String(elapsedSeconds));
         break;
       }
       delay(500);
@@ -660,7 +895,6 @@ void initTime() {
     lastTimeSyncAttempt = millis();
     updateMainDisplay();
     
-    // If we just got time sync, trigger immediate retry
     if (timeSynced && spiffsEntryCount > 0) {
       immediateRetryNeeded = true;
     }
@@ -679,18 +913,11 @@ void syncTime() {
       
       if (timeinfo.tm_year > 120) {
         timeSynced = true;
-        // CRITICAL FIX: Recalculate boot epoch based on current time
-        // This ensures all past timestamps are calculated correctly
-        unsigned long elapsedSeconds = (millis() - bootTime) / 1000;
-        bootEpoch = now - elapsedSeconds;
-        
-        lastKnownTime = now;
-        lastTimeCheck = millis();
+        setOfflineBaseTime();
         
         char buf[30];
         strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
         Serial.println("Time resynchronized at: " + String(buf));
-        Serial.println("Updated boot epoch: " + String(bootEpoch));
         break;
       }
       delay(500);
@@ -699,57 +926,10 @@ void syncTime() {
     lastTimeSyncAttempt = millis();
     updateMainDisplay();
     
-    // Trigger immediate retry after time sync
     if (spiffsEntryCount > 0) {
       immediateRetryNeeded = true;
     }
   }
-}
-
-String millisToISO(unsigned long scanMillis) {
-  if (!timeSynced || bootEpoch == 0) {
-    return "";
-  }
-  
-  // CRITICAL FIX: Ensure we're going backwards in time for past events
-  // scanMillis is when the scan happened (in millis() counter)
-  // bootTime is when the device booted
-  // The difference (scanMillis - bootTime) is how many ms after boot the scan occurred
-  // This should ALWAYS be a positive number and represents time in the past
-  
-  if (scanMillis < bootTime) {
-    // This shouldn't happen, but just in case
-    scanMillis = bootTime;
-  }
-  
-  unsigned long elapsedSeconds = (scanMillis - bootTime) / 1000;
-  
-  // The scan happened 'elapsedSeconds' after boot
-  // So the actual time = bootEpoch + elapsedSeconds
-  time_t scanTime = bootEpoch + elapsedSeconds;
-  
-  // Validate that we're not creating future timestamps
-  time_t currentTime = bootEpoch + ((millis() - bootTime) / 1000);
-  if (scanTime > currentTime) {
-    // If calculated time is in the future, clamp to current time
-    scanTime = currentTime;
-    Serial.println("Warning: Scan time was in future, clamping to current");
-  }
-  
-  struct tm timeinfo;
-  localtime_r(&scanTime, &timeinfo);
-  
-  // Validate year
-  if (timeinfo.tm_year < 100) { // Year less than 2000
-    Serial.println("Warning: Invalid year in timestamp");
-    return "";
-  }
-  
-  char buf[25];
-  snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
-           timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-           timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-  return String(buf);
 }
 
 // ---------------------------- WiFi Functions ----------------------------
@@ -761,7 +941,7 @@ void checkWifiStatus() {
     if (wifiConnected) {
       Serial.println("WiFi connected!");
       lastWifiAttempt = millis();
-      syncTime(); // This will set immediateRetryNeeded if there are entries
+      syncTime();
     } else {
       Serial.println("WiFi disconnected!");
     }
@@ -794,7 +974,7 @@ void connectToWiFi() {
   Serial.println(wifiConnected ? "\nWiFi connected!" : "\nWiFi connection failed");
   
   if (wifiConnected) {
-    syncTime(); // This will set immediateRetryNeeded if there are entries
+    syncTime();
   }
   
   updateMainDisplay();
