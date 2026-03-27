@@ -63,7 +63,10 @@ def api_shift_by_name_with_time():
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
-            employee = Employee.query.filter_by(name=name, surname=surname).first()
+            employee = Employee.query.filter(
+            Employee.name.ilike(name),
+            Employee.surname.ilike(surname)
+).first()    
         else:
             search_name = name_parts[0]
             employee = Employee.query.filter(
@@ -221,7 +224,10 @@ def api_shift_by_name():
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
-            employee = Employee.query.filter_by(name=name, surname=surname).first()
+            employee = Employee.query.filter(
+            Employee.name.ilike(name),
+            Employee.surname.ilike(surname)
+).first()
         else:
             # Try to find by name only
             search_name = name_parts[0]
@@ -357,7 +363,10 @@ def api_start_shift_by_name():
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
-            employee = Employee.query.filter_by(name=name, surname=surname).first()
+            employee = Employee.query.filter(
+    Employee.name.ilike(name),
+    Employee.surname.ilike(surname)
+).first()
         else:
             # Try to find by name only (search in both name and surname fields)
             search_name = name_parts[0]
@@ -455,7 +464,10 @@ def api_end_shift_by_name():
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
-            employee = Employee.query.filter_by(name=name, surname=surname).first()
+            employee = Employee.query.filter(
+    Employee.name.ilike(name),
+    Employee.surname.ilike(surname)
+).first()
         else:
             # Try to find by name only
             search_name = name_parts[0]
