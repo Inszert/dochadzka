@@ -208,19 +208,62 @@ def api_shift():
 
 
 # Smart API endpoint that automatically starts or ends shift based on employee name
+import threading
+from datetime import datetime, timedelta
+
+# --- Deduplication state ---
+_shift_request_lock = threading.Lock()
+_recent_shift_requests: dict[str, datetime] = {}  # name -> timestamp of first request
+SHIFT_DEDUP_WINDOW = 30  # seconds
+
+
+def _is_duplicate_shift_request(employee_name: str) -> bool:
+    """
+    Returns True if the same employee name was seen within the last 30 seconds.
+    Registers the name if it's the first time (or after the window expired).
+    """
+    key = employee_name.strip().lower()
+    now = datetime.utcnow()
+
+    with _shift_request_lock:
+        last_seen = _recent_shift_requests.get(key)
+
+        if last_seen is not None:
+            if now - last_seen < timedelta(seconds=SHIFT_DEDUP_WINDOW):
+                # Still within the window → duplicate
+                return True
+            else:
+                # Window expired → treat as a fresh request and reset
+                _recent_shift_requests[key] = now
+                return False
+        else:
+            # First time seeing this name → register and allow
+            _recent_shift_requests[key] = now
+            return False
+
+
 @app.route("/api/shift_by_name", methods=["POST"])
 def api_shift_by_name():
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
-            
+
         employee_name = data.get("employee_name")
         work_location = data.get("work_location", "Unknown")
-        
+
         if not employee_name:
             return jsonify({"error": "Employee name is required"}), 400
-        
+
+        # ── Deduplication check ──────────────────────────────────────────────
+        if _is_duplicate_shift_request(employee_name):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Please wait 30 seconds before submitting again."
+            }), 429
+        # ────────────────────────────────────────────────────────────────────
+
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
@@ -231,25 +274,25 @@ def api_shift_by_name():
         else:
             search_name = name_parts[0]
             employee = Employee.query.filter(
-                (Employee.name.ilike(f"%{search_name}%")) | 
+                (Employee.name.ilike(f"%{search_name}%")) |
                 (Employee.surname.ilike(f"%{search_name}%"))
             ).first()
-        
+
         if not employee:
             return jsonify({"error": "Employee not found"}), 404
-        
+
         active_shift = Attendance.query.filter_by(
-            employee_id=employee.id, 
+            employee_id=employee.id,
             status='active'
         ).order_by(Attendance.id.desc()).first()
-        
+
         if active_shift:
             now = now_local()
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             hours_worked = active_shift.hours_worked()
             db.session.commit()
-            
+
             return jsonify({
                 "success": True,
                 "action": "ended",
@@ -264,7 +307,7 @@ def api_shift_by_name():
         else:
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
-            
+
             now = now_local()
             record = Attendance(
                 employee_id=employee.id,
@@ -275,7 +318,7 @@ def api_shift_by_name():
             )
             db.session.add(record)
             db.session.commit()
-            
+
             return jsonify({
                 "success": True,
                 "action": "started",
@@ -286,7 +329,7 @@ def api_shift_by_name():
                 "start_time": record.start_time.strftime('%H:%M'),
                 "message": "Shift started successfully"
             }), 200
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
