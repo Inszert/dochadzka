@@ -1,8 +1,9 @@
 from flask import render_template, request, redirect, flash, jsonify
 from app import app
 from models import db, Employee, Attendance
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import threading
 
 # single source of truth for timezone
 TZ = ZoneInfo("Europe/Bratislava")
@@ -13,9 +14,113 @@ def now_local():
     return datetime.now(TZ)
 
 
+# ---------------------------------------------------------------------------
+# Deduplication
+#
+# Rules:
+# 1. /api/shift_by_name repeated with same name in short time = blocked.
+# 2. /api/shift_by_name_with_time repeated with same name/time = allowed.
+# 3. Cross-endpoint:
+#    - shift_by_name_with_time -> shift_by_name
+#    - shift_by_name -> shift_by_name_with_time
+#    If same employee name, request arrived within 1 minute, and event_time is
+#    within +-1 minute, ignore the second one.
+# 4. Different employee name = always normal.
+# 5. Cross-endpoint memory resets after 1 minute.
+# ---------------------------------------------------------------------------
+
+_shift_request_lock = threading.Lock()
+
+_recent_shift_by_name_requests: dict[str, datetime] = {}
+_recent_cross_endpoint_requests = []
+
+SHIFT_BY_NAME_DEDUP_WINDOW = timedelta(seconds=30)
+CROSS_ENDPOINT_WINDOW = timedelta(minutes=1)
+CROSS_ENDPOINT_TIME_TOLERANCE = timedelta(minutes=1)
+
+
+def _normalize_dt(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=TZ)
+    return dt.astimezone(TZ)
+
+
+def _is_duplicate_shift_by_name(employee_name: str) -> bool:
+    """
+    Blocks repeated /api/shift_by_name requests for the same employee
+    in a short amount of time.
+    """
+    key = employee_name.strip().lower()
+    now = now_local()
+
+    with _shift_request_lock:
+        last_seen = _recent_shift_by_name_requests.get(key)
+
+        if last_seen is not None and now - last_seen < SHIFT_BY_NAME_DEDUP_WINDOW:
+            return True
+
+        _recent_shift_by_name_requests[key] = now
+        return False
+
+
+def _clean_cross_endpoint_requests():
+    now = now_local()
+    _recent_cross_endpoint_requests[:] = [
+        item for item in _recent_cross_endpoint_requests
+        if now - item["created_at"] <= CROSS_ENDPOINT_WINDOW
+    ]
+
+
+def _is_duplicate_cross_endpoint(source: str, employee_name: str, event_time: datetime) -> bool:
+    """
+    Blocks only when matching request came from the OTHER endpoint.
+    Same endpoint repeated calls are not blocked here.
+    """
+    key = employee_name.strip().lower()
+    event_time = _normalize_dt(event_time)
+
+    other_source = (
+        "shift_by_name_with_time"
+        if source == "shift_by_name"
+        else "shift_by_name"
+    )
+
+    with _shift_request_lock:
+        _clean_cross_endpoint_requests()
+
+        for item in _recent_cross_endpoint_requests:
+            if item["source"] != other_source:
+                continue
+
+            same_name = item["name_key"] == key
+            close_time = abs(event_time - item["event_time"]) <= CROSS_ENDPOINT_TIME_TOLERANCE
+
+            if same_name and close_time:
+                return True
+
+        return False
+
+
+def _register_cross_endpoint_request(source: str, employee_name: str, event_time: datetime):
+    key = employee_name.strip().lower()
+    now = now_local()
+    event_time = _normalize_dt(event_time)
+
+    with _shift_request_lock:
+        _clean_cross_endpoint_requests()
+
+        _recent_cross_endpoint_requests.append({
+            "source": source,
+            "name_key": key,
+            "event_time": event_time,
+            "created_at": now
+        })
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
+
 
 @app.route("/documentation")
 def documentation():
@@ -58,7 +163,6 @@ def api_shift_by_name_with_time():
         if not timestamp_str:
             return jsonify({"error": "Timestamp is required"}), 400
 
-        # Parse timestamp and attach Bratislava timezone (DST-aware)
         try:
             ts = datetime.fromisoformat(timestamp_str)
             if ts.tzinfo is None:
@@ -68,7 +172,15 @@ def api_shift_by_name_with_time():
         except ValueError:
             return jsonify({"error": "Invalid timestamp format. Use ISO 8601, e.g., 2026-02-17T14:30:00"}), 400
 
-        # Find employee by name
+        if _is_duplicate_cross_endpoint("shift_by_name_with_time", employee_name, ts):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Matching shift_by_name request was already processed within 1 minute."
+            }), 429
+
+        _register_cross_endpoint_request("shift_by_name_with_time", employee_name, ts)
+
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
             name, surname = name_parts
@@ -86,7 +198,6 @@ def api_shift_by_name_with_time():
         if not employee:
             return jsonify({"error": "Employee not found"}), 404
 
-        # Check for active shift
         active_shift = Attendance.query.filter_by(
             employee_id=employee.id,
             status='active'
@@ -138,7 +249,6 @@ def api_shift_by_name_with_time():
         return jsonify({"error": str(e)}), 500
 
 
-# Smart API endpoint that automatically starts or ends shift based on employee ID
 @app.route("/api/shift", methods=["POST"])
 def api_shift():
     try:
@@ -207,41 +317,6 @@ def api_shift():
         return jsonify({"error": str(e)}), 500
 
 
-# Smart API endpoint that automatically starts or ends shift based on employee name
-import threading
-from datetime import datetime, timedelta
-
-# --- Deduplication state ---
-_shift_request_lock = threading.Lock()
-_recent_shift_requests: dict[str, datetime] = {}  # name -> timestamp of first request
-SHIFT_DEDUP_WINDOW = 30  # seconds
-
-
-def _is_duplicate_shift_request(employee_name: str) -> bool:
-    """
-    Returns True if the same employee name was seen within the last 30 seconds.
-    Registers the name if it's the first time (or after the window expired).
-    """
-    key = employee_name.strip().lower()
-    now = datetime.utcnow()
-
-    with _shift_request_lock:
-        last_seen = _recent_shift_requests.get(key)
-
-        if last_seen is not None:
-            if now - last_seen < timedelta(seconds=SHIFT_DEDUP_WINDOW):
-                # Still within the window → duplicate
-                return True
-            else:
-                # Window expired → treat as a fresh request and reset
-                _recent_shift_requests[key] = now
-                return False
-        else:
-            # First time seeing this name → register and allow
-            _recent_shift_requests[key] = now
-            return False
-
-
 @app.route("/api/shift_by_name", methods=["POST"])
 def api_shift_by_name():
     try:
@@ -255,14 +330,23 @@ def api_shift_by_name():
         if not employee_name:
             return jsonify({"error": "Employee name is required"}), 400
 
-        # ── Deduplication check ──────────────────────────────────────────────
-        if _is_duplicate_shift_request(employee_name):
+        now = now_local()
+
+        if _is_duplicate_shift_by_name(employee_name):
             return jsonify({
                 "success": False,
                 "action": "ignored",
-                "message": "Duplicate request ignored. Please wait 30 seconds before submitting again."
+                "message": "Duplicate shift_by_name request ignored. Please wait before submitting again."
             }), 429
-        # ────────────────────────────────────────────────────────────────────
+
+        if _is_duplicate_cross_endpoint("shift_by_name", employee_name, now):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Matching shift_by_name_with_time request was already processed within 1 minute."
+            }), 429
+
+        _register_cross_endpoint_request("shift_by_name", employee_name, now)
 
         name_parts = employee_name.strip().split(' ', 1)
         if len(name_parts) == 2:
@@ -287,7 +371,6 @@ def api_shift_by_name():
         ).order_by(Attendance.id.desc()).first()
 
         if active_shift:
-            now = now_local()
             active_shift.end_time = now.time()
             active_shift.status = 'completed'
             hours_worked = active_shift.hours_worked()
@@ -308,7 +391,6 @@ def api_shift_by_name():
             if not work_location:
                 return jsonify({"error": "Work location is required to start a shift"}), 400
 
-            now = now_local()
             record = Attendance(
                 employee_id=employee.id,
                 date=now.date(),
@@ -334,7 +416,6 @@ def api_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 
-# API endpoint for ESP32 to start shift with employee ID
 @app.route("/api/start_shift", methods=["POST"])
 def api_start_shift():
     try:
@@ -376,7 +457,6 @@ def api_start_shift():
         return jsonify({"error": str(e)}), 500
 
 
-# API endpoint for ESP32 to start shift with employee name
 @app.route("/api/start_shift_by_name", methods=["POST"])
 def api_start_shift_by_name():
     try:
@@ -432,7 +512,6 @@ def api_start_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 
-# API endpoint for ESP32 to end shift with employee ID
 @app.route("/api/end_shift", methods=["POST"])
 def api_end_shift():
     try:
@@ -474,7 +553,6 @@ def api_end_shift():
         return jsonify({"error": str(e)}), 500
 
 
-# API endpoint for ESP32 to end shift with employee name
 @app.route("/api/end_shift_by_name", methods=["POST"])
 def api_end_shift_by_name():
     try:
@@ -528,7 +606,6 @@ def api_end_shift_by_name():
         return jsonify({"error": str(e)}), 500
 
 
-# Web interface for starting shift
 @app.route("/attendance", methods=["GET", "POST"])
 def attendance():
     if request.method == "POST":
@@ -702,6 +779,7 @@ def delete_employee(emp_id):
 import requests
 from datetime import date
 
+
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
@@ -720,11 +798,9 @@ def report(emp_id):
 
     records = records_query.order_by(Attendance.date.desc()).all()
 
-    # roky, ktoré potrebujeme pre sviatky
     years = set(rec.date.year for rec in records)
     holidays = set()
 
-    # volanie Nager API pre každý rok
     for yr in years:
         try:
             url = f"https://date.nager.at/api/v3/PublicHolidays/{yr}/SK"
