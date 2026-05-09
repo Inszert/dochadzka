@@ -16,38 +16,37 @@ DB_NAME = os.environ.get("DATABASE_NAME")
 if DB_HOST and DB_USER and DB_PASSWORD and DB_NAME:
     database_url = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}?sslmode=require"
 else:
-    # fallback na lokálnu SQLite
     database_url = "sqlite:///attendance.db"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Connection pool a ping pre stabilitu spojenia
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_pre_ping": True,   # automaticky re-connectne ak DB uzavrie spojenie
+    "pool_pre_ping": True,
     "pool_size": 5,
     "max_overflow": 10
 }
 
-# SECRET_KEY z env alebo fallback
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
-# Initialize the database with the app
+# Initialize database
 db.init_app(app)
 
-# Import models AFTER initializing db but BEFORE create_all()
+# Import models BEFORE create_all()
 from models import Employee, Attendance, ShiftDedupLog
-# Import routes after models
+
+# Import routes AFTER models
 from routes import *
 
-if __name__ == "__main__":
-    with app.app_context():
-        try:
-            db.create_all()
-            print("Database tables created successfully!")
-        except Exception as e:
-            print("Database initialization error:", e)
+# Toto sa spustí aj pri Gunicorn/Koyeb štarte
+with app.app_context():
+    try:
+        db.create_all()
+        print("Database tables checked/created successfully!")
+    except Exception as e:
+        print("Database initialization error:", e)
 
-    # Použitie portu z ENV, fallback na 8000
+
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port)
