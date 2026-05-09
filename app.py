@@ -36,8 +36,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 db.init_app(app)
 
 # Import models AFTER initializing db but BEFORE create_all()
-from models import Employee, Attendance
-
+from models import Employee, Attendance, ShiftDedupLog
 # Import routes after models
 from routes import *
 

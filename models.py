@@ -8,6 +8,16 @@ class Employee(db.Model):
 
     def __repr__(self):
         return f'<Employee {self.name} {self.surname}>'
+    
+
+class ShiftDedupLog(db.Model):
+    __tablename__ = "shift_dedup_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(50), nullable=False)
+    name_key = db.Column(db.String(150), nullable=False, index=True)
+    event_time = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)    
 
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
