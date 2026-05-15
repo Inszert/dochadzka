@@ -117,7 +117,8 @@ def employees():
         return redirect("/employees")
     
     all_emps = Employee.query.all()
-    return render_template("employees.html", all_emps=all_emps)
+    current_month = now_local().strftime("%Y-%m")
+    return render_template("employees.html", all_emps=all_emps, current_month=current_month)
 
 
 @app.route("/api/shift_by_name_with_time", methods=["POST"])
@@ -723,6 +724,26 @@ def delete_attendance(record_id):
     db.session.commit()
     flash("Záznam bol odstránený", "success")
     return redirect("/attendance")
+
+
+@app.route("/send_report", methods=["POST"])
+def send_report():
+    month_str = request.form.get("month")
+    try:
+        sel_year, sel_month = int(month_str[:4]), int(month_str[5:7])
+    except (ValueError, IndexError, TypeError):
+        flash("Neplatný mesiac", "danger")
+        return redirect("/employees")
+
+    try:
+        from mailer import send_monthly_report
+        send_monthly_report(sel_year, sel_month)
+        flash(f"Report za {sel_month:02d}/{sel_year} bol odoslaný na {' prenako.kosice@gmail.com'}", "success")
+    except Exception as e:
+        print(f"[send_report] ERROR: {e}", flush=True)
+        flash(f"Odoslanie zlyhalo: {e}", "danger")
+
+    return redirect("/employees")
 
 
 @app.route("/edit_employee/<int:emp_id>", methods=["GET", "POST"])

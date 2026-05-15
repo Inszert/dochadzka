@@ -51,12 +51,17 @@ def send_open_shifts_alert(open_records: list):
         + "\n".join(lines)
         + "\n\nProsím, skontrolujte a manuálne ukončite smeny ak je to potrebné."
     )
-    resend.Emails.send({
-        "from": RESEND_FROM,
-        "to": [REPORT_EMAIL],
-        "subject": f"Otvorené smeny o 23:00 – {today}",
-        "text": body,
-    })
+    try:
+        resend.Emails.send({
+            "from": RESEND_FROM,
+            "to": [REPORT_EMAIL],
+            "subject": f"Otvorené smeny o 23:00 – {today}",
+            "text": body,
+        })
+        print(f"[mailer] Open-shifts alert sent to {REPORT_EMAIL}", flush=True)
+    except Exception as e:
+        print(f"[mailer] ERROR sending open-shifts alert: {e}", flush=True)
+        raise
 
 
 def _build_excel(year: int, month: int) -> bytes:
@@ -190,10 +195,15 @@ def send_monthly_report(year: int, month: int):
     month_label = date(year, month, 1).strftime("%B %Y")
     filename = f"dochadzka_{year}_{month:02d}.xlsx"
 
-    resend.Emails.send({
-        "from": RESEND_FROM,
-        "to": [REPORT_EMAIL],
-        "subject": f"Mesačný výkaz dochádzky – {month_label}",
-        "text": f"V prílohe nájdete výkaz dochádzky za {month_label}.",
-        "attachments": [{"filename": filename, "content": list(excel_bytes)}],
-    })
+    try:
+        resend.Emails.send({
+            "from": RESEND_FROM,
+            "to": [REPORT_EMAIL],
+            "subject": f"Mesačný výkaz dochádzky – {month_label}",
+            "text": f"V prílohe nájdete výkaz dochádzky za {month_label}.",
+            "attachments": [{"filename": filename, "content": list(excel_bytes)}],
+        })
+        print(f"[mailer] Monthly report {year}-{month:02d} sent to {REPORT_EMAIL}", flush=True)
+    except Exception as e:
+        print(f"[mailer] ERROR sending monthly report {year}-{month:02d}: {e}", flush=True)
+        raise
