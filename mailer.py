@@ -14,7 +14,7 @@ TZ = ZoneInfo("Europe/Bratislava")
 REPORT_EMAIL = "prenako.kosice@gmail.com"
 
 resend.api_key = os.environ.get("RESEND_API_KEY", "")
-RESEND_FROM = os.environ.get("RESEND_FROM_EMAIL", "dochadzka@prenako.sk")
+RESEND_FROM = "onboarding@resend.dev"
 
 
 def _get_holidays(year: int) -> set:
