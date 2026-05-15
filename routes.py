@@ -3,6 +3,7 @@ from app import app
 from models import db, Employee, Attendance, ShiftDedupLog
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
+import calendar
 import requests
 
 TZ = ZoneInfo("Europe/Bratislava")
@@ -751,22 +752,29 @@ def delete_employee(emp_id):
 @app.route("/report/<int:emp_id>", methods=["GET", "POST"])
 def report(emp_id):
     emp = Employee.query.get_or_404(emp_id)
-    records_query = Attendance.query.filter_by(employee_id=emp_id)
 
-    if request.method == "POST":
-        start_date_str = request.form.get("start_date")
-        end_date_str = request.form.get("end_date")
-        if start_date_str and end_date_str:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            records_query = records_query.filter(
-                Attendance.date >= start_date,
-                Attendance.date <= end_date
-            )
+    now = now_local()
+    month_str = request.form.get("month") if request.method == "POST" else request.args.get("month")
 
-    records = records_query.order_by(Attendance.date.desc()).all()
+    if month_str:
+        try:
+            sel_year, sel_month = int(month_str[:4]), int(month_str[5:7])
+        except (ValueError, IndexError):
+            sel_year, sel_month = now.year, now.month
+    else:
+        sel_year, sel_month = now.year, now.month
 
-    years = set(rec.date.year for rec in records)
+    first_day = date(sel_year, sel_month, 1)
+    last_day = date(sel_year, sel_month, calendar.monthrange(sel_year, sel_month)[1])
+    selected_month = f"{sel_year}-{sel_month:02d}"
+
+    records = Attendance.query.filter(
+        Attendance.employee_id == emp_id,
+        Attendance.date >= first_day,
+        Attendance.date <= last_day,
+    ).order_by(Attendance.date.desc()).all()
+
+    years = {sel_year}
     holidays = set()
 
     for yr in years:
@@ -809,5 +817,6 @@ def report(emp_id):
         saturday_hours=saturday_hours,
         sunday_hours=sunday_hours,
         holiday_hours=holiday_hours,
-        holidays=holidays
+        holidays=holidays,
+        selected_month=selected_month,
     )

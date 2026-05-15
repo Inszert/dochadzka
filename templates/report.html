@@ -41,15 +41,9 @@
 
   <form method="POST" class="row g-3 mb-4 filter-form">
     <div class="col-md-3">
-      <label class="form-label">Od:</label>
-      <input type="date" name="start_date" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label">Do:</label>
-      <input type="date" name="end_date" class="form-control">
-    </div>
-    <div class="col-md-2 align-self-end">
-      <button type="submit" class="btn btn-primary w-100">Filter</button>
+      <label class="form-label">Mesiac:</label>
+      <input type="month" name="month" class="form-control"
+             value="{{ selected_month }}" onchange="this.form.submit()">
     </div>
   </form>
 

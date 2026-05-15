@@ -1,5 +1,5 @@
 from extensions import db
-from datetime import datetime
+from datetime import datetime, date
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -40,3 +40,16 @@ class Attendance(db.Model):
 
     def __repr__(self):
         return f'<Attendance {self.employee_id} {self.date}>'
+
+
+class EmailLog(db.Model):
+    __tablename__ = "email_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    job_type = db.Column(db.String(50), nullable=False)
+    reference_date = db.Column(db.Date, nullable=False)
+    sent_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('job_type', 'reference_date', name='uq_email_log_job_date'),
+    )

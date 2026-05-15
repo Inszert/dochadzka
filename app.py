@@ -27,7 +27,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
 db.init_app(app)
 
-from models import Employee, Attendance, ShiftDedupLog
+from models import Employee, Attendance, ShiftDedupLog, EmailLog
 from routes import *
 
 _IS_POSTGRES = database_url.startswith("postgresql")
@@ -71,6 +71,8 @@ def _create_tables_with_retry():
 with app.app_context():
     _create_tables_with_retry()
 
+from scheduler import start_scheduler
+start_scheduler(app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
