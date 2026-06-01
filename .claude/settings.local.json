@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(update-config)",
+      "Bash(claude mcp *)",
+      "Bash(PGPASSWORD=\"npg_QgjvFc6Vk3JL\" psql *)",
+      "Bash(pip show *)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import app; print\\('Import OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python -c \"import app; print\\('OK'\\)\")",
+      "Bash(python -m pytest test_dedup.py -v)"
+    ]
+  }
+}

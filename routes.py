@@ -17,9 +17,10 @@ def now_local():
 # DATABASE-BASED DEDUPLICATION
 # ---------------------------------------------------------------------------
 
-SHIFT_BY_NAME_DEDUP_WINDOW = timedelta(seconds=30)
-CROSS_ENDPOINT_WINDOW = timedelta(minutes=1)
-CROSS_ENDPOINT_TIME_TOLERANCE = timedelta(minutes=1)
+SHIFT_BY_NAME_DEDUP_WINDOW = timedelta(minutes=5)
+CROSS_ENDPOINT_WINDOW = timedelta(minutes=5)
+CROSS_ENDPOINT_TIME_TOLERANCE = timedelta(minutes=5)
+EXACT_TIMESTAMP_TOLERANCE = timedelta(seconds=5)
 
 
 def _normalize_dt(dt: datetime) -> datetime:
@@ -58,6 +59,24 @@ def _is_duplicate_shift_by_name(employee_name: str) -> bool:
         ShiftDedupLog.source == "shift_by_name",
         ShiftDedupLog.name_key == key,
         ShiftDedupLog.created_at >= cutoff
+    ).first()
+
+    return existing is not None
+
+
+def _is_duplicate_shift_by_name_with_time(employee_name: str, event_time: datetime) -> bool:
+    _cleanup_dedup_logs()
+
+    key = employee_name.strip().lower()
+    event_time = _normalize_dt(event_time)
+    min_time = event_time - EXACT_TIMESTAMP_TOLERANCE
+    max_time = event_time + EXACT_TIMESTAMP_TOLERANCE
+
+    existing = ShiftDedupLog.query.filter(
+        ShiftDedupLog.source == "shift_by_name_with_time",
+        ShiftDedupLog.name_key == key,
+        ShiftDedupLog.event_time >= min_time,
+        ShiftDedupLog.event_time <= max_time
     ).first()
 
     return existing is not None
@@ -146,12 +165,19 @@ def api_shift_by_name_with_time():
         except ValueError:
             return jsonify({"error": "Invalid timestamp format. Use ISO 8601, e.g., 2026-02-17T14:30:00"}), 400
 
+        if _is_duplicate_shift_by_name_with_time(employee_name, ts):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Identical shift_by_name_with_time request already processed."
+            }), 200
+
         if _is_duplicate_cross_endpoint("shift_by_name_with_time", employee_name, ts):
             return jsonify({
                 "success": False,
                 "action": "ignored",
-                "message": "Duplicate request ignored. Matching shift_by_name request was already processed within 1 minute."
-            }), 429
+                "message": "Duplicate request ignored. Matching shift_by_name request was already processed within 5 minutes."
+            }), 200
 
         _register_dedup_request("shift_by_name_with_time", employee_name, ts)
 
@@ -311,14 +337,14 @@ def api_shift_by_name():
                 "success": False,
                 "action": "ignored",
                 "message": "Duplicate shift_by_name request ignored."
-            }), 429
+            }), 200
 
         if _is_duplicate_cross_endpoint("shift_by_name", employee_name, now):
             return jsonify({
                 "success": False,
                 "action": "ignored",
                 "message": "Duplicate request ignored. Matching shift_by_name_with_time request already exists."
-            }), 429
+            }), 200
 
         _register_dedup_request("shift_by_name", employee_name, now)
 
