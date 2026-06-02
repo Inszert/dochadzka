@@ -17,7 +17,27 @@ class ShiftDedupLog(db.Model):
     source = db.Column(db.String(50), nullable=False)
     name_key = db.Column(db.String(150), nullable=False, index=True)
     event_time = db.Column(db.DateTime(timezone=True), nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False)    
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+
+class ShiftEventClaim(db.Model):
+    """
+    Atomic per-minute claim table. UNIQUE(name_key, minute_bucket) ensures
+    that even concurrent gunicorn workers can only write one attendance record
+    per employee per minute — the second INSERT raises IntegrityError and is
+    returned as HTTP 200 "ignored" without touching Attendance.
+    """
+    __tablename__ = "shift_event_claim"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name_key = db.Column(db.String(150), nullable=False)
+    minute_bucket = db.Column(db.DateTime(timezone=True), nullable=False)
+    source = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("name_key", "minute_bucket", name="uq_shift_event_claim"),
+    )
 
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)

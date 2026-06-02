@@ -27,7 +27,7 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback_secret")
 
 db.init_app(app)
 
-from models import Employee, Attendance, ShiftDedupLog, EmailLog
+from models import Employee, Attendance, ShiftDedupLog, ShiftEventClaim, EmailLog
 from routes import *
 
 _IS_POSTGRES = database_url.startswith("postgresql")

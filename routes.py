@@ -1,8 +1,9 @@
 from flask import render_template, request, redirect, flash, jsonify
 from app import app
-from models import db, Employee, Attendance, ShiftDedupLog
+from models import db, Employee, Attendance, ShiftDedupLog, ShiftEventClaim
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
+from sqlalchemy.exc import IntegrityError
 import calendar
 import requests
 
@@ -32,6 +33,7 @@ def _normalize_dt(dt: datetime) -> datetime:
 def _cleanup_dedup_logs():
     cutoff = now_local() - CROSS_ENDPOINT_WINDOW
     ShiftDedupLog.query.filter(ShiftDedupLog.created_at < cutoff).delete()
+    ShiftEventClaim.query.filter(ShiftEventClaim.created_at < cutoff).delete()
     db.session.commit()
 
 
@@ -109,6 +111,32 @@ def _is_duplicate_cross_endpoint(source: str, employee_name: str, event_time: da
     return existing is not None
 
 
+def _claim_shift_event(source: str, employee_name: str, event_time: datetime) -> bool:
+    """
+    Atomically claim the (employee, minute) slot via a DB-level unique constraint.
+    Returns True if this request owns the slot; False if a concurrent request already
+    claimed it (duplicate).  Uses flush() so the claim and the subsequent attendance
+    write commit together — the constraint check happens at the PostgreSQL/SQLite row
+    level and is safe across multiple gunicorn workers.
+    """
+    key = employee_name.strip().lower()
+    minute_bucket = _normalize_dt(event_time).replace(second=0, microsecond=0)
+
+    try:
+        claim = ShiftEventClaim(
+            name_key=key,
+            minute_bucket=minute_bucket,
+            source=source,
+            created_at=now_local(),
+        )
+        db.session.add(claim)
+        db.session.flush()
+        return True
+    except IntegrityError:
+        db.session.rollback()
+        return False
+
+
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -177,6 +205,13 @@ def api_shift_by_name_with_time():
                 "success": False,
                 "action": "ignored",
                 "message": "Duplicate request ignored. Matching shift_by_name request was already processed within 5 minutes."
+            }), 200
+
+        if not _claim_shift_event("shift_by_name_with_time", employee_name, ts):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Concurrent request already claimed this event.",
             }), 200
 
         _register_dedup_request("shift_by_name_with_time", employee_name, ts)
@@ -344,6 +379,13 @@ def api_shift_by_name():
                 "success": False,
                 "action": "ignored",
                 "message": "Duplicate request ignored. Matching shift_by_name_with_time request already exists."
+            }), 200
+
+        if not _claim_shift_event("shift_by_name", employee_name, now):
+            return jsonify({
+                "success": False,
+                "action": "ignored",
+                "message": "Duplicate request ignored. Concurrent request already claimed this event.",
             }), 200
 
         _register_dedup_request("shift_by_name", employee_name, now)
