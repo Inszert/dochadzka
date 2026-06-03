@@ -194,25 +194,13 @@ def api_shift_by_name_with_time():
             return jsonify({"error": "Invalid timestamp format. Use ISO 8601, e.g., 2026-02-17T14:30:00"}), 400
 
         if _is_duplicate_shift_by_name_with_time(employee_name, ts):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate request ignored. Identical shift_by_name_with_time request already processed."
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         if _is_duplicate_cross_endpoint("shift_by_name_with_time", employee_name, ts):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate request ignored. Matching shift_by_name request was already processed within 5 minutes."
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         if not _claim_shift_event("shift_by_name_with_time", employee_name, ts):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate request ignored. Concurrent request already claimed this event.",
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         _register_dedup_request("shift_by_name_with_time", employee_name, ts)
 
@@ -368,25 +356,13 @@ def api_shift_by_name():
         now = now_local()
 
         if _is_duplicate_shift_by_name(employee_name):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate shift_by_name request ignored."
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         if _is_duplicate_cross_endpoint("shift_by_name", employee_name, now):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate request ignored. Matching shift_by_name_with_time request already exists."
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         if not _claim_shift_event("shift_by_name", employee_name, now):
-            return jsonify({
-                "success": False,
-                "action": "ignored",
-                "message": "Duplicate request ignored. Concurrent request already claimed this event.",
-            }), 200
+            return jsonify({"success": True, "duplicate": True}), 200
 
         _register_dedup_request("shift_by_name", employee_name, now)
 
